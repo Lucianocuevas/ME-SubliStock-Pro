@@ -1,0 +1,6 @@
+{
+  "name": "SubliStock Pro - Gestión de Taller de Sublimación",
+  "description": "Sistema integral de control de stock, insumos y producción para talleres de sublimación con alertas de inventario crítico, órdenes de compra a proveedores, seguimiento de pedidos de clientes con vencimientos, ventas diarias y reportes mensuales en Excel y PDF.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
