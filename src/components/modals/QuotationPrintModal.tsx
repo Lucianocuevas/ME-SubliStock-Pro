@@ -1,5 +1,5 @@
-import React, { useRef } from 'react';
-import { X, Printer, Download, Flame, CheckCircle, Clock } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { X, Printer, Download, Flame, CheckCircle, Clock, Calculator, Sparkles, Layers } from 'lucide-react';
 import { Quotation, QuotationItem } from '../../types';
 import { StorageService, formatCurrency, AppSettings } from '../../services/storageService';
 
@@ -17,6 +17,7 @@ export const QuotationPrintModal: React.FC<Props> = ({
   settings
 }) => {
   const printRef = useRef<HTMLDivElement>(null);
+  const [showTechnicalCostSheet, setShowTechnicalCostSheet] = useState(false);
 
   if (!isOpen || !quotation) return null;
 
@@ -41,12 +42,26 @@ export const QuotationPrintModal: React.FC<Props> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-sm overflow-y-auto">
       <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col my-auto max-h-[96vh]">
         {/* Modal Controls Bar (hidden during browser print) */}
-        <div className="print:hidden px-6 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950">
-          <div className="flex items-center gap-2">
+        <div className="print:hidden px-6 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950 flex-wrap gap-2">
+          <div className="flex items-center gap-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-orange-400">
-              Vista Previa de Presupuesto Membretado
+              Vista Previa de Presupuesto
             </span>
-            <span className="text-xs text-slate-400">({quotation.quoteNumber})</span>
+            <span className="text-xs text-slate-400 font-mono">({quotation.quoteNumber})</span>
+
+            {/* Toggle: Modo Cliente vs Ficha Técnica de Taller */}
+            <button
+              type="button"
+              onClick={() => setShowTechnicalCostSheet(!showTechnicalCostSheet)}
+              className={`text-xs px-2.5 py-1 rounded-lg border font-semibold flex items-center gap-1.5 transition-colors ${
+                showTechnicalCostSheet
+                  ? 'bg-orange-950 text-orange-300 border-orange-700'
+                  : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-white'
+              }`}
+            >
+              <Calculator className="w-3.5 h-3.5" />
+              <span>{showTechnicalCostSheet ? 'Ficha de Taller (Con Costos)' : 'Modo Cliente (Formal)'}</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -250,6 +265,77 @@ export const QuotationPrintModal: React.FC<Props> = ({
                 </div>
               </div>
             </div>
+
+            {/* Optional Technical Workshop Cost Sheet */}
+            {showTechnicalCostSheet && (
+              <div className="border-t-2 border-orange-400 pt-5 mt-6 mb-6 bg-orange-50/40 p-4 rounded-lg border border-orange-200">
+                <div className="flex items-center justify-between pb-2 mb-3 border-b border-orange-200">
+                  <div className="flex items-center gap-2">
+                    <Calculator className="w-4 h-4 text-orange-600" />
+                    <span className="font-bold text-orange-900 uppercase text-[11px] tracking-wider">
+                      Ficha Técnica de Fabricación & Análisis de Costos (Uso Interno de Taller)
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-orange-700 font-semibold">
+                    Insumos + Flete + Papel + Tinta + Luz + Margen
+                  </span>
+                </div>
+
+                <table className="w-full text-[10px] border-collapse mb-3">
+                  <thead>
+                    <tr className="bg-orange-100/80 text-orange-950 font-bold border-b border-orange-200">
+                      <th className="py-1.5 px-2 text-left">Ítem / Trabajo</th>
+                      <th className="py-1.5 px-1 text-center">Cant.</th>
+                      <th className="py-1.5 px-1 text-right">Insumo</th>
+                      <th className="py-1.5 px-1 text-right">Flete</th>
+                      <th className="py-1.5 px-1 text-right">Papel</th>
+                      <th className="py-1.5 px-1 text-right">Tinta</th>
+                      <th className="py-1.5 px-1 text-right">Luz</th>
+                      <th className="py-1.5 px-1 text-right">Costo Unit.</th>
+                      <th className="py-1.5 px-1 text-right">Precio Venta</th>
+                      <th className="py-1.5 px-2 text-right">Margen % (Ganancia)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-orange-200/60">
+                    {quotation.items.map((item, idx) => {
+                      const cb = item.costBreakdown;
+                      const unitCost = cb ? cb.totalUnitCost : (item.unitCost || Math.round(item.unitPrice * 0.4));
+                      const profitUnit = item.unitPrice - unitCost;
+                      const marginPct = unitCost > 0 ? Math.round((profitUnit / unitCost) * 100) : 0;
+                      return (
+                        <tr key={idx} className="hover:bg-orange-100/40">
+                          <td className="py-1.5 px-2 font-semibold text-slate-800">
+                            {item.productName} {item.saleMode === 'lisa' ? '(Lisa)' : '(Estampada)'}
+                          </td>
+                          <td className="py-1.5 px-1 text-center font-bold text-slate-700">{item.quantity}</td>
+                          <td className="py-1.5 px-1 text-right font-mono text-slate-600">${cb?.baseProductCost || '-'}</td>
+                          <td className="py-1.5 px-1 text-right font-mono text-slate-600">${cb?.shippingCost || '-'}</td>
+                          <td className="py-1.5 px-1 text-right font-mono text-slate-600">${cb?.paperCost || '-'}</td>
+                          <td className="py-1.5 px-1 text-right font-mono text-slate-600">${cb?.inkCost || '-'}</td>
+                          <td className="py-1.5 px-1 text-right font-mono text-slate-600">${cb?.electricityCost || '-'}</td>
+                          <td className="py-1.5 px-1 text-right font-mono font-bold text-slate-900">${unitCost}</td>
+                          <td className="py-1.5 px-1 text-right font-mono font-bold text-slate-900">${item.unitPrice}</td>
+                          <td className="py-1.5 px-2 text-right font-bold text-emerald-800">
+                            {marginPct}% (+{formatCurrency(profitUnit * item.quantity)})
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                {quotation.totalCost ? (
+                  <div className="flex justify-between items-center bg-white p-2.5 rounded border border-orange-200 text-[11px]">
+                    <span className="text-slate-600">
+                      Costo Total Producción Taller: <strong className="font-mono text-slate-900">{formatCurrency(quotation.totalCost)}</strong>
+                    </span>
+                    <span className="text-emerald-700 font-bold">
+                      Ganancia Neta Proyectada: +{formatCurrency((quotation.totalAmount || 0) - quotation.totalCost)}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            )}
 
             {/* Signature and Approval Line */}
             <div className="border-t border-dashed border-slate-300 pt-8 mt-6 grid grid-cols-2 gap-8 text-center text-[10px] text-slate-500">

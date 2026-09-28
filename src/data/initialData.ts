@@ -1246,8 +1246,22 @@ export const INITIAL_QUOTATIONS: Quotation[] = [
         quantity: 30,
         unitPrice: 6500,
         totalPrice: 195000,
+        unitCost: 3070,
+        totalCost: 92100,
         designNotes: 'Logo corporativo al frente 20x28cm en cuatricromía HD',
-        designName: 'Logo Impacto Visual 2026'
+        designName: 'Logo Impacto Visual 2026',
+        costBreakdown: {
+          baseProductCost: 2600,
+          shippingCost: 150,
+          paperCost: 120,
+          inkCost: 80,
+          electricityCost: 70,
+          extraCost: 50,
+          totalUnitCost: 3070,
+          profitMarginPercent: 111.7,
+          profitUnitAmount: 3430,
+          suggestedUnitPrice: 6500
+        }
       },
       {
         productId: 'prod-taz-01',
@@ -1256,7 +1270,21 @@ export const INITIAL_QUOTATIONS: Quotation[] = [
         quantity: 30,
         unitPrice: 4200,
         totalPrice: 126000,
-        designNotes: 'Mismo logo con eslogan al dorso'
+        unitCost: 1500,
+        totalCost: 45000,
+        designNotes: 'Mismo logo con eslogan al dorso',
+        costBreakdown: {
+          baseProductCost: 1250,
+          shippingCost: 100,
+          paperCost: 40,
+          inkCost: 35,
+          electricityCost: 45,
+          extraCost: 30,
+          totalUnitCost: 1500,
+          profitMarginPercent: 180,
+          profitUnitAmount: 2700,
+          suggestedUnitPrice: 4200
+        }
       }
     ],
     subtotal: 321000,
@@ -1264,9 +1292,61 @@ export const INITIAL_QUOTATIONS: Quotation[] = [
     taxPercent: 0,
     taxAmount: 0,
     totalAmount: 305000,
+    totalCost: 137100,
+    estimatedProfit: 167900,
     estimatedDays: 5,
     notes: 'Presupuesto válido por 15 días corridos. Precios incluyen insumos e impresión en alta definición.',
     paymentTerms: 'Seña del 50% al aprobar boceto digital, saldo contra entrega o despacho.'
+  },
+  {
+    id: 'quote-02',
+    quoteNumber: 'COT-2026-0043',
+    createdAt: '2026-09-28T09:15:00Z',
+    validUntil: '2026-10-13T23:59:59Z',
+    customerId: 'cust-02',
+    customerName: 'Club Atlético Talleres Juniors',
+    customerEmail: 'indumentaria@talleresjuniors.com',
+    customerPhone: '+54 9 11 3456-7890',
+    customerTaxId: '30-65891234-5',
+    status: 'enviado',
+    items: [
+      {
+        productId: 'prod-gor-01',
+        productName: 'Gorra Trucker Frente Blanco Sublimable',
+        saleMode: 'con_diseno',
+        size: 'Único',
+        color: 'Azul / Blanco',
+        quantity: 50,
+        unitPrice: 4800,
+        totalPrice: 240000,
+        unitCost: 2360,
+        totalCost: 118000,
+        designNotes: 'Escudo del club sublimado en frente espumado con cinta térmica',
+        designName: 'Escudo Centenario CA Talleres',
+        costBreakdown: {
+          baseProductCost: 2000,
+          shippingCost: 120,
+          paperCost: 50,
+          inkCost: 40,
+          electricityCost: 90,
+          extraCost: 60,
+          totalUnitCost: 2360,
+          profitMarginPercent: 103.4,
+          profitUnitAmount: 2440,
+          suggestedUnitPrice: 4800
+        }
+      }
+    ],
+    subtotal: 240000,
+    discountAmount: 0,
+    taxPercent: 0,
+    taxAmount: 0,
+    totalAmount: 240000,
+    totalCost: 118000,
+    estimatedProfit: 122000,
+    estimatedDays: 7,
+    notes: 'Entrega previa al torneo de fútbol infantil. Embalado en cajas por docena.',
+    paymentTerms: '50% de anticipo para compra de gorras, saldo al momento de retirar.'
   }
 ];
 

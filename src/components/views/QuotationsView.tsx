@@ -10,7 +10,14 @@ import {
   Trash2,
   Search,
   Layers,
-  Sparkles
+  Sparkles,
+  Calculator,
+  ChevronDown,
+  ChevronUp,
+  Percent,
+  Truck,
+  Zap,
+  Package
 } from 'lucide-react';
 import { Quotation, QuotationStatus, QuotationItem, Customer, ProductItem } from '../../types';
 import { StorageService, formatCurrency, AppSettings } from '../../services/storageService';
@@ -38,6 +45,7 @@ export const QuotationsView: React.FC<Props> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [expandedCostQuoteId, setExpandedCostQuoteId] = useState<string | null>(null);
 
   const filtered = quotations.filter(q => {
     const matchesSearch =
@@ -68,9 +76,10 @@ export const QuotationsView: React.FC<Props> = ({
     const customer = customers.find(c => c.name === quote.customerName || c.id === quote.customerId);
     const customerId = customer ? customer.id : (quote.customerId || 'cust-' + Date.now());
 
-    // Map quotation items to customer order items
+    // Map quotation items to customer order items with accurate unit cost
     const orderItems = quote.items.map((item: QuotationItem) => {
       const prod = products.find(p => p.id === item.productId);
+      const accurateUnitCost = item.costBreakdown?.totalUnitCost || item.unitCost || prod?.costPrice || Math.round(item.unitPrice * 0.4);
       return {
         productId: item.productId,
         productName: item.productName,
@@ -81,7 +90,7 @@ export const QuotationsView: React.FC<Props> = ({
         color: item.color,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
-        unitCost: prod?.costPrice || Math.round(item.unitPrice * 0.4),
+        unitCost: accurateUnitCost,
         totalPrice: item.totalPrice,
         customizationDetails: item.designNotes || item.designName,
         designImage: item.designImage,
@@ -320,18 +329,113 @@ export const QuotationsView: React.FC<Props> = ({
 
                 {/* Summary footer */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs text-slate-400 pt-2 border-t border-slate-800/80 gap-2">
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 flex-wrap">
                     <span>Válido hasta: <strong className="text-slate-200">{new Date(q.validUntil).toLocaleDateString('es-AR')}</strong></span>
                     <span>Plazo entrega: <strong className="text-slate-200">{q.estimatedDays} días hábiles</strong></span>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedCostQuoteId(expandedCostQuoteId === q.id ? null : q.id)}
+                      className="text-orange-400 hover:text-orange-300 flex items-center gap-1 font-semibold text-[11px] bg-orange-950/40 px-2 py-0.5 rounded border border-orange-800/40"
+                    >
+                      <Calculator className="w-3 h-3" />
+                      <span>{expandedCostQuoteId === q.id ? 'Ocultar Costos del Trabajo' : 'Ver Desglose de Costos & Margen'}</span>
+                      {expandedCostQuoteId === q.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                    </button>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-400">Total Presupuestado:</span>
-                    <span className="font-mono font-bold text-orange-400 text-base">
-                      {formatCurrency(q.totalAmount)}
-                    </span>
+                  <div className="flex items-center gap-3">
+                    {q.totalCost ? (
+                      <span className="text-[11px] text-slate-400">
+                        Costo Taller: <strong className="text-slate-300 font-mono">{formatCurrency(q.totalCost)}</strong> · Ganancia:{' '}
+                        <strong className="text-emerald-400 font-mono">+{formatCurrency((q.totalAmount || 0) - q.totalCost)}</strong>
+                      </span>
+                    ) : null}
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">Total:</span>
+                      <span className="font-mono font-bold text-orange-400 text-base">
+                        {formatCurrency(q.totalAmount)}
+                      </span>
+                    </div>
                   </div>
                 </div>
+
+                {/* Collapsible Workshop Cost Breakdown Details */}
+                {expandedCostQuoteId === q.id && (
+                  <div className="p-3 bg-slate-950 rounded-lg border border-orange-500/30 space-y-3 pt-3 mt-1">
+                    <div className="flex items-center justify-between text-xs border-b border-slate-800 pb-2">
+                      <span className="font-bold text-white flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-orange-400" />
+                        Análisis de Costos de Fabricación del Trabajo (Taller)
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        Cálculo unitario: Insumo + Flete + Hoja + Tinta + Electricidad + Extras
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                      {q.items.map((item, itemIdx) => {
+                        const cb = item.costBreakdown;
+                        const unitCost = cb ? cb.totalUnitCost : (item.unitCost || Math.round(item.unitPrice * 0.4));
+                        const profitUnit = item.unitPrice - unitCost;
+                        const marginPct = unitCost > 0 ? Math.round((profitUnit / unitCost) * 100) : 0;
+
+                        return (
+                          <div key={itemIdx} className="bg-slate-900/80 p-3 rounded border border-slate-800 space-y-2 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-200">{item.productName}</span>
+                              <span className="text-slate-400 font-mono">{item.quantity} unidades</span>
+                            </div>
+
+                            {cb ? (
+                              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-[10px] text-center">
+                                <div className="bg-slate-950 p-1 rounded border border-slate-800/80">
+                                  <span className="text-slate-500 block truncate">Insumo</span>
+                                  <span className="text-slate-200 font-mono font-bold">${cb.baseProductCost}</span>
+                                </div>
+                                <div className="bg-slate-950 p-1 rounded border border-slate-800/80">
+                                  <span className="text-slate-500 block truncate">Flete</span>
+                                  <span className="text-slate-200 font-mono font-bold">${cb.shippingCost}</span>
+                                </div>
+                                <div className="bg-slate-950 p-1 rounded border border-slate-800/80">
+                                  <span className="text-slate-500 block truncate">Hoja</span>
+                                  <span className="text-slate-200 font-mono font-bold">${cb.paperCost}</span>
+                                </div>
+                                <div className="bg-slate-950 p-1 rounded border border-slate-800/80">
+                                  <span className="text-slate-500 block truncate">Tinta</span>
+                                  <span className="text-slate-200 font-mono font-bold">${cb.inkCost}</span>
+                                </div>
+                                <div className="bg-slate-950 p-1 rounded border border-slate-800/80">
+                                  <span className="text-slate-500 block truncate">Luz/Plancha</span>
+                                  <span className="text-slate-200 font-mono font-bold">${cb.electricityCost}</span>
+                                </div>
+                                <div className="bg-slate-950 p-1 rounded border border-slate-800/80">
+                                  <span className="text-slate-500 block truncate">Extras</span>
+                                  <span className="text-slate-200 font-mono font-bold">${cb.extraCost || 0}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-[11px] text-slate-400">
+                                Costo directo unitario estimado: <strong className="text-slate-200">{formatCurrency(unitCost)}</strong>
+                              </p>
+                            )}
+
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-[11px]">
+                              <span>
+                                Costo Unit: <strong className="text-cyan-400 font-mono">{formatCurrency(unitCost)}</strong>
+                              </span>
+                              <span>
+                                Precio Venta: <strong className="text-white font-mono">{formatCurrency(item.unitPrice)}</strong>
+                              </span>
+                              <span className="text-emerald-400 font-bold">
+                                Ganancia: +{formatCurrency(profitUnit * item.quantity)} ({marginPct}%)
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })

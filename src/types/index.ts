@@ -200,6 +200,19 @@ export interface DailySale {
 
 export type QuotationStatus = 'borrador' | 'enviado' | 'aprobado' | 'rechazado' | 'vencido';
 
+export interface JobCostBreakdown {
+  baseProductCost: number;     // Insumo base (taza, remera, gorra, etc.)
+  shippingCost: number;        // Flete y logística prorrateada
+  paperCost: number;           // Hoja de impresión / papel sublimable
+  inkCost: number;             // Tinta de sublimación HD
+  electricityCost: number;     // Electricidad / amortización de plancha térmica
+  extraCost?: number;          // Mano de obra, empaque o adicionales
+  totalUnitCost: number;       // Costo total directo por unidad producida
+  profitMarginPercent: number; // Margen de ganancia pretendido (ej: 60%)
+  profitUnitAmount: number;    // Ganancia neta por unidad
+  suggestedUnitPrice: number;  // Precio unitario calculado
+}
+
 export interface QuotationItem {
   productId: string;
   productName: string;
@@ -209,9 +222,12 @@ export interface QuotationItem {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  unitCost?: number;
+  totalCost?: number;
   designImage?: string;
   designName?: string;
   designNotes?: string;
+  costBreakdown?: JobCostBreakdown;
 }
 
 export interface Quotation {
@@ -231,6 +247,8 @@ export interface Quotation {
   taxPercent: number;
   taxAmount: number;
   totalAmount: number;
+  totalCost?: number;
+  estimatedProfit?: number;
   estimatedDays: number;
   notes?: string;
   paymentTerms?: string;

@@ -573,7 +573,18 @@ export class StorageService {
       return INITIAL_QUOTATIONS;
     }
     try {
-      return JSON.parse(raw);
+      const list: Quotation[] = JSON.parse(raw);
+      // If list has older quotes without cost breakdown or missing new ones, merge or augment
+      if (list.length < INITIAL_QUOTATIONS.length) {
+        const existingIds = new Set(list.map(q => q.id));
+        const missing = INITIAL_QUOTATIONS.filter(q => !existingIds.has(q.id));
+        if (missing.length > 0) {
+          const merged = [...list, ...missing];
+          this.saveQuotations(merged);
+          return merged;
+        }
+      }
+      return list;
     } catch {
       return INITIAL_QUOTATIONS;
     }
