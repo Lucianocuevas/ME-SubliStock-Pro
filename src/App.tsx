@@ -47,6 +47,7 @@ import { NewSupplierModal } from './components/modals/NewSupplierModal';
 import { NewQuotationModal } from './components/modals/NewQuotationModal';
 import { QuotationPrintModal } from './components/modals/QuotationPrintModal';
 import { NewPaymentModal } from './components/modals/NewPaymentModal';
+import { CloudSyncModal } from './components/modals/CloudSyncModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -85,6 +86,9 @@ export default function App() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentEntityType, setPaymentEntityType] = useState<'customer' | 'supplier'>('customer');
   const [paymentEntityId, setPaymentEntityId] = useState<string | undefined>(undefined);
+
+  // Cloud Sync & Local Offline Modal
+  const [isCloudSyncOpen, setIsCloudSyncOpen] = useState(false);
 
   // Quotation Modals
   const [isNewQuotationOpen, setIsNewQuotationOpen] = useState(false);
@@ -227,6 +231,7 @@ export default function App() {
         onOpenNewQuotation={() => setIsNewQuotationOpen(true)}
         onOpenNewProduct={handleOpenNewProduct}
         onOpenNewPurchase={() => handleOpenPurchaseOrder()}
+        onOpenCloudSync={() => setIsCloudSyncOpen(true)}
       />
 
       {/* Navigation Tabs */}
@@ -446,6 +451,12 @@ export default function App() {
         initialEntityType={paymentEntityType}
         initialEntityId={paymentEntityId}
         onPaymentSaved={loadData}
+      />
+
+      <CloudSyncModal
+        isOpen={isCloudSyncOpen}
+        onClose={() => setIsCloudSyncOpen(false)}
+        onDataRefreshed={loadData}
       />
 
       <NewProductModal

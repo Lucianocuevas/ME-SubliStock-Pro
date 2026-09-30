@@ -24,6 +24,7 @@ import {
 import { ProductItem, ProductLabelSettings, LabelPreset } from '../../../types';
 import { AppSettings, StorageService, LABEL_PRESETS_CONFIG, DEFAULT_LABEL_SETTINGS } from '../../../services/storageService';
 import { LabelPrintService, LabelPrintItem } from '../../../services/labelPrintService';
+import { A4LabelPrintPreviewModal } from '../../modals/A4LabelPrintPreviewModal';
 
 interface Props {
   settings: AppSettings;
@@ -48,6 +49,7 @@ export const ProductLabelsTab: React.FC<Props> = ({
   const [startOffset, setStartOffset] = useState<number>(0);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
 
   // Load products
   useEffect(() => {
@@ -273,6 +275,15 @@ export const ProductLabelsTab: React.FC<Props> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsPreviewModalOpen(true)}
+            className="px-4 py-2 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white rounded-lg text-xs font-black flex items-center gap-2 shadow-lg shadow-pink-950/40 transition-all"
+            title="Abrir vista previa a escala de la hoja A4 con ajuste interactivo de márgenes"
+          >
+            <Eye className="w-4 h-4" />
+            <span>Vista Previa Hoja A4 & Márgenes</span>
+          </button>
           <button
             type="button"
             onClick={handleResetToDefault}
@@ -636,53 +647,121 @@ export const ProductLabelsTab: React.FC<Props> = ({
               </button>
             </div>
 
-            {/* Custom Grid Controls */}
-            <div className="pt-3 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <div>
-                <label className="text-slate-400 block mb-1">Columnas</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={6}
-                  value={labelConfig.columns}
-                  onChange={e => setLabelConfig({ ...labelConfig, columns: Number(e.target.value) || 1, preset: 'custom' })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white"
-                />
+            {/* Custom Grid & Margin Controls */}
+            <div className="pt-3 border-t border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                  Dimensiones de Etiquetas & Márgenes de Hoja A4
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsPreviewModalOpen(true)}
+                  className="text-pink-400 hover:text-pink-300 text-xs font-bold flex items-center gap-1"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Calibrar en Pantalla</span>
+                </button>
               </div>
-              <div>
-                <label className="text-slate-400 block mb-1">Filas</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={15}
-                  value={labelConfig.rows}
-                  onChange={e => setLabelConfig({ ...labelConfig, rows: Number(e.target.value) || 1, preset: 'custom' })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white"
-                />
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <label className="text-slate-400 block mb-1">Columnas</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={6}
+                    value={labelConfig.columns}
+                    onChange={e => setLabelConfig({ ...labelConfig, columns: Number(e.target.value) || 1, preset: 'custom' })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Filas</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={15}
+                    value={labelConfig.rows}
+                    onChange={e => setLabelConfig({ ...labelConfig, rows: Number(e.target.value) || 1, preset: 'custom' })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Ancho (mm)</label>
+                  <input
+                    type="number"
+                    min={20}
+                    max={210}
+                    step={0.5}
+                    value={labelConfig.labelWidthMm}
+                    onChange={e => setLabelConfig({ ...labelConfig, labelWidthMm: Number(e.target.value) || 20, preset: 'custom' })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Alto (mm)</label>
+                  <input
+                    type="number"
+                    min={15}
+                    max={297}
+                    step={0.5}
+                    value={labelConfig.labelHeightMm}
+                    onChange={e => setLabelConfig({ ...labelConfig, labelHeightMm: Number(e.target.value) || 15, preset: 'custom' })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="text-slate-400 block mb-1">Ancho (mm)</label>
-                <input
-                  type="number"
-                  min={20}
-                  max={210}
-                  step={0.5}
-                  value={labelConfig.labelWidthMm}
-                  onChange={e => setLabelConfig({ ...labelConfig, labelWidthMm: Number(e.target.value) || 20, preset: 'custom' })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white"
-                />
-              </div>
-              <div>
-                <label className="text-slate-400 block mb-1">Alto (mm)</label>
-                <input
-                  type="number"
-                  min={15}
-                  max={297}
-                  step={0.5}
-                  value={labelConfig.labelHeightMm}
-                  onChange={e => setLabelConfig({ ...labelConfig, labelHeightMm: Number(e.target.value) || 15, preset: 'custom' })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white"
-                />
+
+              {/* Millimeter Margins Inputs */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-2 border-t border-slate-800/60">
+                <div>
+                  <label className="text-slate-400 block mb-1">Margen Sup. (mm)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={50}
+                    step={0.5}
+                    value={labelConfig.marginTopMm}
+                    onChange={e => setLabelConfig({ ...labelConfig, marginTopMm: Number(e.target.value) || 0, preset: 'custom' })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Margen Inf. (mm)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={50}
+                    step={0.5}
+                    value={labelConfig.marginBottomMm ?? labelConfig.marginTopMm}
+                    onChange={e => setLabelConfig({ ...labelConfig, marginBottomMm: Number(e.target.value) || 0, preset: 'custom' })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Margen Izq. (mm)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={50}
+                    step={0.5}
+                    value={labelConfig.marginLeftMm}
+                    onChange={e => setLabelConfig({ ...labelConfig, marginLeftMm: Number(e.target.value) || 0, preset: 'custom' })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Margen Der. (mm)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={50}
+                    step={0.5}
+                    value={labelConfig.marginRightMm ?? labelConfig.marginLeftMm}
+                    onChange={e => setLabelConfig({ ...labelConfig, marginRightMm: Number(e.target.value) || 0, preset: 'custom' })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -956,6 +1035,15 @@ export const ProductLabelsTab: React.FC<Props> = ({
                 <strong className="text-white">Sup: {labelConfig.marginTopMm}mm | Lat: {labelConfig.marginLeftMm}mm</strong>
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setIsPreviewModalOpen(true)}
+              className="w-full py-2 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white rounded-lg text-xs font-black flex items-center justify-center gap-2 shadow-md transition-all"
+            >
+              <Eye className="w-4 h-4" />
+              <span>Simular Hoja A4 & Calibrar Márgenes</span>
+            </button>
           </div>
         </div>
       </div>
@@ -1168,6 +1256,15 @@ export const ProductLabelsTab: React.FC<Props> = ({
           <div className="flex items-center gap-3 flex-wrap">
             <button
               type="button"
+              onClick={() => setIsPreviewModalOpen(true)}
+              className="px-4 py-2.5 bg-pink-600 hover:bg-pink-500 text-white rounded-lg text-xs font-black flex items-center gap-2 shadow-md transition-all"
+            >
+              <Eye className="w-4 h-4" />
+              <span>Vista Previa A4 & Márgenes</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleDirectPrint}
               disabled={totalLabelsToPrint === 0}
               className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-2 border border-slate-700 transition-colors shadow-sm"
@@ -1197,6 +1294,34 @@ export const ProductLabelsTab: React.FC<Props> = ({
           </div>
         </div>
       </div>
+
+      {/* DEDICATED A4 PRINT PREVIEW & MARGIN CALIBRATOR MODAL */}
+      <A4LabelPrintPreviewModal
+        isOpen={isPreviewModalOpen}
+        onClose={() => setIsPreviewModalOpen(false)}
+        items={
+          itemsToPrint.length > 0
+            ? itemsToPrint
+            : [{ product: sampleProduct, quantity: labelConfig.columns * labelConfig.rows }]
+        }
+        labelConfig={labelConfig}
+        settings={settings}
+        onUpdateConfig={newConfig => {
+          setLabelConfig(newConfig);
+        }}
+        onSaveConfigPermanently={newConfig => {
+          setLabelConfig(newConfig);
+          const updatedSettings = {
+            ...settings,
+            labelSettings: newConfig
+          };
+          StorageService.saveSettings(updatedSettings);
+          onSaveSettings(updatedSettings);
+          showNotification('¡Márgenes y formato de etiquetas guardados con éxito!');
+        }}
+        startOffset={startOffset}
+        onUpdateOffset={setStartOffset}
+      />
     </div>
   );
 };

@@ -148,6 +148,20 @@ export class FirestoreService {
   }> {
     const nowIso = new Date().toISOString();
 
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const errMsg = 'Dispositivo sin conexión a internet. La aplicación sigue funcionando en modo local offline.';
+      this.saveSyncInfo({
+        status: 'error',
+        errorMessage: errMsg
+      });
+      return {
+        success: false,
+        syncedAt: nowIso,
+        counts: DEFAULT_SYNC_INFO.counts,
+        error: errMsg
+      };
+    }
+
     this.saveSyncInfo({
       status: 'syncing',
       errorMessage: undefined
@@ -211,6 +225,9 @@ export class FirestoreService {
         quotations: quotations.length,
         accountMovements: accountMovements.length
       };
+
+      // Reset pending changes counter
+      StorageService.resetPendingChanges();
 
       this.saveSyncInfo({
         status: 'success',

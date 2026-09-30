@@ -12,10 +12,14 @@ import {
   Shield,
   Settings as SettingsIcon,
   BellOff,
-  Smartphone
+  Smartphone,
+  Cloud,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { AppUser } from '../types';
 import { ROLE_LABELS } from '../data/initialData';
+import { StorageService } from '../services/storageService';
 
 interface Props {
   workshopName: string;
@@ -29,6 +33,7 @@ interface Props {
   onOpenNewQuotation: () => void;
   onOpenNewProduct: () => void;
   onOpenNewPurchase: () => void;
+  onOpenCloudSync?: () => void;
 }
 
 export const Header: React.FC<Props> = ({
@@ -42,16 +47,41 @@ export const Header: React.FC<Props> = ({
   onOpenNewOrder,
   onOpenNewQuotation,
   onOpenNewProduct,
-  onOpenNewPurchase
+  onOpenNewPurchase,
+  onOpenCloudSync
 }) => {
   // Live digital clock: updates every second
   const [now, setNow] = useState(new Date());
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [pendingChangesCount, setPendingChangesCount] = useState(StorageService.getPendingChangesCount());
 
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(new Date());
     }, 1000);
-    return () => clearInterval(timer);
+
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    const handlePendingChanges = (e: any) => {
+      if (e?.detail?.pendingCount !== undefined) {
+        setPendingChangesCount(e.detail.pendingCount);
+      } else {
+        setPendingChangesCount(StorageService.getPendingChangesCount());
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('sublistock_pending_changes_updated', handlePendingChanges);
+    window.addEventListener('sublistock_firestore_sync_updated', handlePendingChanges);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('sublistock_pending_changes_updated', handlePendingChanges);
+      window.removeEventListener('sublistock_firestore_sync_updated', handlePendingChanges);
+    };
   }, []);
 
   const timeString = now.toLocaleTimeString('es-AR', {
@@ -155,6 +185,51 @@ export const Header: React.FC<Props> = ({
               <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span className="hidden md:inline">{urgentOrdersCount} por entregar</span>
               <span className="md:hidden">{urgentOrdersCount} hoy</span>
+            </button>
+          )}
+
+          {/* Cloud / Offline Database Sync Pill */}
+          {onOpenCloudSync && (
+            <button
+              onClick={onOpenCloudSync}
+              className={`px-2.5 py-1.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
+                !isOnline
+                  ? 'bg-amber-950/80 border-amber-600/80 text-amber-300 hover:bg-amber-900/90'
+                  : pendingChangesCount > 0
+                  ? 'bg-emerald-950/80 border-emerald-500/80 text-emerald-300 hover:bg-emerald-900/90'
+                  : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
+              }`}
+              title={
+                !isOnline
+                  ? 'Modo Local Offline Activo: Estás desconectado. Los datos se guardan de forma local. Clic para gestionar.'
+                  : pendingChangesCount > 0
+                  ? `${pendingChangesCount} cambios locales listos para subir a la nube. Clic para sincronizar.`
+                  : 'Base de datos conectada y respaldada en la nube. Clic para sincronizar o descargar.'
+              }
+            >
+              {!isOnline ? (
+                <>
+                  <WifiOff className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="hidden sm:inline">Offline (Local)</span>
+                  {pendingChangesCount > 0 && (
+                    <span className="w-4 h-4 rounded-full bg-amber-500 text-slate-950 text-[10px] flex items-center justify-center font-black">
+                      {pendingChangesCount}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Cloud className={`w-3.5 h-3.5 shrink-0 ${pendingChangesCount > 0 ? 'text-emerald-400' : 'text-cyan-400'}`} />
+                  <span className="hidden md:inline">
+                    {pendingChangesCount > 0 ? `Subir Nube (${pendingChangesCount})` : 'Nube'}
+                  </span>
+                  {pendingChangesCount > 0 && (
+                    <span className="w-4 h-4 rounded-full bg-emerald-500 text-slate-950 text-[10px] flex items-center justify-center font-black animate-pulse">
+                      {pendingChangesCount}
+                    </span>
+                  )}
+                </>
+              )}
             </button>
           )}
 

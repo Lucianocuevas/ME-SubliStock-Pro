@@ -38,7 +38,9 @@ const STORAGE_KEYS = {
   USERS: 'sublistock_users_v1',
   CURRENT_USER_ID: 'sublistock_current_user_v1',
   QUOTATIONS: 'sublistock_quotations_v1',
-  ACCOUNT_MOVEMENTS: 'sublistock_account_movements_v1'
+  ACCOUNT_MOVEMENTS: 'sublistock_account_movements_v1',
+  PENDING_CHANGES_COUNT: 'sublistock_pending_changes_count_v1',
+  LAST_LOCAL_SAVE_AT: 'sublistock_last_local_save_at_v1'
 };
 
 export const LABEL_PRESETS_CONFIG: Record<LabelPreset, Partial<ProductLabelSettings>> = {
@@ -50,6 +52,8 @@ export const LABEL_PRESETS_CONFIG: Record<LabelPreset, Partial<ProductLabelSetti
     labelHeightMm: 33.8,
     marginTopMm: 12,
     marginLeftMm: 6,
+    marginRightMm: 6,
+    marginBottomMm: 12,
     gapHorizontalMm: 3,
     gapVerticalMm: 0,
     showBorder: true
@@ -62,6 +66,8 @@ export const LABEL_PRESETS_CONFIG: Record<LabelPreset, Partial<ProductLabelSetti
     labelHeightMm: 25.4,
     marginTopMm: 13,
     marginLeftMm: 8,
+    marginRightMm: 8,
+    marginBottomMm: 13,
     gapHorizontalMm: 2,
     gapVerticalMm: 0,
     showBorder: true
@@ -74,6 +80,8 @@ export const LABEL_PRESETS_CONFIG: Record<LabelPreset, Partial<ProductLabelSetti
     labelHeightMm: 38.1,
     marginTopMm: 15,
     marginLeftMm: 0,
+    marginRightMm: 0,
+    marginBottomMm: 15,
     gapHorizontalMm: 0,
     gapVerticalMm: 0,
     showBorder: true
@@ -86,6 +94,8 @@ export const LABEL_PRESETS_CONFIG: Record<LabelPreset, Partial<ProductLabelSetti
     labelHeightMm: 57,
     marginTopMm: 6,
     marginLeftMm: 0,
+    marginRightMm: 0,
+    marginBottomMm: 6,
     gapHorizontalMm: 0,
     gapVerticalMm: 0,
     showBorder: true
@@ -103,6 +113,8 @@ export const DEFAULT_LABEL_SETTINGS: ProductLabelSettings = {
   labelHeightMm: 33.8,
   marginTopMm: 12,
   marginLeftMm: 6,
+  marginRightMm: 6,
+  marginBottomMm: 12,
   gapHorizontalMm: 3,
   gapVerticalMm: 0,
   showBorder: true,
@@ -172,6 +184,53 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export class StorageService {
+  // LOCAL OFFLINE CHANGE TRACKING
+  static recordLocalChange(): void {
+    try {
+      const current = parseInt(localStorage.getItem(STORAGE_KEYS.PENDING_CHANGES_COUNT) || '0', 10);
+      const next = current + 1;
+      const now = new Date().toISOString();
+      localStorage.setItem(STORAGE_KEYS.PENDING_CHANGES_COUNT, String(next));
+      localStorage.setItem(STORAGE_KEYS.LAST_LOCAL_SAVE_AT, now);
+      window.dispatchEvent(new CustomEvent('sublistock_pending_changes_updated', {
+        detail: { pendingCount: next, lastSaveAt: now }
+      }));
+    } catch (e) {
+      console.warn('Could not record local change in storage:', e);
+    }
+  }
+
+  static getPendingChangesCount(): number {
+    return parseInt(localStorage.getItem(STORAGE_KEYS.PENDING_CHANGES_COUNT) || '0', 10);
+  }
+
+  static getLastLocalSaveAt(): string | null {
+    return localStorage.getItem(STORAGE_KEYS.LAST_LOCAL_SAVE_AT);
+  }
+
+  static resetPendingChanges(): void {
+    localStorage.setItem(STORAGE_KEYS.PENDING_CHANGES_COUNT, '0');
+    window.dispatchEvent(new CustomEvent('sublistock_pending_changes_updated', {
+      detail: { pendingCount: 0, lastSaveAt: this.getLastLocalSaveAt() }
+    }));
+  }
+
+  static getLocalDatabaseSummary() {
+    return {
+      products: this.getProducts().length,
+      customers: this.getCustomers().length,
+      suppliers: this.getSuppliers().length,
+      orders: this.getCustomerOrders().length,
+      purchases: this.getPurchaseOrders().length,
+      dailySales: this.getDailySales().length,
+      quotations: this.getQuotations().length,
+      accountMovements: this.getAccountMovements().length,
+      users: this.getUsers().length,
+      pendingChanges: this.getPendingChangesCount(),
+      lastLocalSaveAt: this.getLastLocalSaveAt()
+    };
+  }
+
   // PRODUCTS
   static getProducts(): ProductItem[] {
     const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
@@ -188,6 +247,7 @@ export class StorageService {
 
   static saveProducts(products: ProductItem[]): void {
     localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+    this.recordLocalChange();
     window.dispatchEvent(new Event('sublistock_products_updated'));
   }
 
@@ -352,6 +412,7 @@ export class StorageService {
 
   static saveSuppliers(suppliers: Supplier[]): void {
     localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(suppliers));
+    this.recordLocalChange();
     window.dispatchEvent(new Event('sublistock_suppliers_updated'));
   }
 
@@ -407,6 +468,7 @@ export class StorageService {
 
   static savePurchaseOrders(purchases: PurchaseOrder[]): void {
     localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify(purchases));
+    this.recordLocalChange();
     window.dispatchEvent(new Event('sublistock_purchases_updated'));
   }
 
@@ -472,6 +534,7 @@ export class StorageService {
 
   static saveCustomers(customers: Customer[]): void {
     localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
+    this.recordLocalChange();
     window.dispatchEvent(new Event('sublistock_customers_updated'));
   }
 
@@ -514,6 +577,7 @@ export class StorageService {
 
   static saveCustomerOrders(orders: CustomerOrder[]): void {
     localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
+    this.recordLocalChange();
     window.dispatchEvent(new Event('sublistock_orders_updated'));
   }
 
@@ -667,6 +731,7 @@ export class StorageService {
 
   static saveDailySales(sales: DailySale[]): void {
     localStorage.setItem(STORAGE_KEYS.DAILY_SALES, JSON.stringify(sales));
+    this.recordLocalChange();
     window.dispatchEvent(new Event('sublistock_sales_updated'));
   }
 
@@ -703,13 +768,17 @@ export class StorageService {
     if (!raw) return DEFAULT_SETTINGS;
     try {
       const parsed = JSON.parse(raw);
+      const labelSettings = {
+        ...DEFAULT_LABEL_SETTINGS,
+        ...(parsed.labelSettings || {})
+      };
+      if (labelSettings.marginRightMm === undefined) labelSettings.marginRightMm = labelSettings.marginLeftMm;
+      if (labelSettings.marginBottomMm === undefined) labelSettings.marginBottomMm = labelSettings.marginTopMm;
+
       return {
         ...DEFAULT_SETTINGS,
         ...parsed,
-        labelSettings: {
-          ...DEFAULT_LABEL_SETTINGS,
-          ...(parsed.labelSettings || {})
-        }
+        labelSettings
       };
     } catch {
       return DEFAULT_SETTINGS;
@@ -718,6 +787,7 @@ export class StorageService {
 
   static saveSettings(settings: AppSettings): void {
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+    this.recordLocalChange();
     window.dispatchEvent(new Event('sublistock_settings_updated'));
   }
 
@@ -808,6 +878,7 @@ export class StorageService {
 
   static saveQuotations(quotes: Quotation[]): void {
     localStorage.setItem(STORAGE_KEYS.QUOTATIONS, JSON.stringify(quotes));
+    this.recordLocalChange();
     window.dispatchEvent(new Event('sublistock_quotes_updated'));
   }
 
@@ -878,6 +949,7 @@ export class StorageService {
 
   static saveAccountMovements(movements: AccountMovement[]): void {
     localStorage.setItem(STORAGE_KEYS.ACCOUNT_MOVEMENTS, JSON.stringify(movements));
+    this.recordLocalChange();
     window.dispatchEvent(new Event('sublistock_movements_updated'));
   }
 

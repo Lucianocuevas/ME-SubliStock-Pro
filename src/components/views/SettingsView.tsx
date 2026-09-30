@@ -24,10 +24,17 @@ import {
   Flame,
   ShieldCheck,
   RefreshCw,
-  Tag
+  Tag,
+  Cloud,
+  CloudUpload,
+  Database,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { StorageService, AppSettings, formatCurrency } from '../../services/storageService';
+import { FirestoreService } from '../../services/firestoreService';
 import { ProductLabelsTab } from './settings/ProductLabelsTab';
+import { CloudSyncModal } from '../modals/CloudSyncModal';
 
 interface Props {
   onRefreshData: () => void;
@@ -38,6 +45,9 @@ export const SettingsView: React.FC<Props> = ({ onRefreshData }) => {
   const [activeTab, setActiveTab] = useState<'company' | 'labels' | 'alerts' | 'billing' | 'backup'>('company');
   const [isSaved, setIsSaved] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
+  const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
+  const [isUploadingCloud, setIsUploadingCloud] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState(StorageService.getPendingChangesCount());
 
   const showNotification = (msg: string) => {
     setNotificationMsg(msg);
@@ -261,8 +271,13 @@ export const SettingsView: React.FC<Props> = ({ onRefreshData }) => {
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
-          <RotateCcw className="w-4 h-4 text-purple-400" />
-          <span>Copia de Seguridad</span>
+          <Database className="w-4 h-4 text-cyan-400" />
+          <span>Base de Datos Local & Nube</span>
+          {pendingChanges > 0 && (
+            <span className="w-4 h-4 rounded-full bg-emerald-500 text-slate-950 text-[10px] flex items-center justify-center font-black">
+              {pendingChanges}
+            </span>
+          )}
         </button>
       </div>
 
@@ -807,52 +822,183 @@ export const SettingsView: React.FC<Props> = ({ onRefreshData }) => {
         </form>
       )}
 
-      {/* TAB 4: COPIA DE SEGURIDAD & MANTENIMIENTO */}
+      {/* TAB 4: BASE DE DATOS LOCAL OFFLINE & NUBE FIRESTORE */}
       {activeTab === 'backup' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 space-y-4">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider pb-3 border-b border-slate-800">
-            Resguardo de Datos y Restauración
-          </h3>
-          <p className="text-xs text-slate-400">
-            Todos los datos de tu empresa, catálogo de productos, compras, presupuestos y órdenes se guardan de forma persistente. Puedes descargar una copia de seguridad para transferirla a otra PC o restaurar el catálogo demo.
-          </p>
+        <div className="space-y-6">
+          {/* Cloud & Offline Overview Card */}
+          <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-slate-800 rounded-xl p-5 sm:p-6 space-y-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    Base de Datos Local Offline & Sincronización en la Nube
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    El taller almacena automáticamente todos los datos en tu base local offline. Puedes trabajar sin internet y subir los cambios a la nube cuando desees.
+                  </p>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-            {/* Export JSON */}
-            <button
-              type="button"
-              onClick={handleExportBackup}
-              className="p-4 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-xl text-xs font-semibold text-white flex flex-col items-center justify-center gap-2 transition-colors"
-            >
-              <Download className="w-6 h-6 text-cyan-400" />
-              <span>Descargar Copia de Seguridad JSON</span>
-              <span className="text-[10px] text-slate-500">Guarda todos tus datos actuales</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setIsCloudSyncModalOpen(true)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 rounded-lg text-xs font-bold flex items-center gap-2 shrink-0 transition-colors"
+              >
+                <Cloud className="w-4 h-4 text-cyan-400" />
+                <span>Abrir Centro de Nube</span>
+              </button>
+            </div>
 
-            {/* Import JSON */}
-            <label className="p-4 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-xl text-xs font-semibold text-white flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors">
-              <Upload className="w-6 h-6 text-indigo-400" />
-              <span>Restaurar Copia desde JSON</span>
-              <span className="text-[10px] text-slate-500">Cargar un archivo .json previo</span>
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleImportBackup}
-                className="hidden"
-              />
-            </label>
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800/80 space-y-1">
+                <div className="flex items-center justify-between text-xs text-slate-400 font-semibold">
+                  <span>Modo de Operación</span>
+                  <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-800">
+                    Offline Local
+                  </span>
+                </div>
+                <div className="text-lg font-black text-white">100% Autónomo</div>
+                <p className="text-[11px] text-slate-400">Funciona sin internet en cualquier momento.</p>
+              </div>
 
-            {/* Reset Demo Data */}
-            <button
-              type="button"
-              onClick={handleResetDemo}
-              className="p-4 bg-slate-950 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-800 rounded-xl text-xs font-semibold text-slate-300 hover:text-rose-300 flex flex-col items-center justify-center gap-2 transition-colors"
-            >
-              <RotateCcw className="w-6 h-6 text-rose-400" />
-              <span>Restablecer Catálogo Demo</span>
-              <span className="text-[10px] text-slate-500">Reiniciar ejemplos iniciales</span>
-            </button>
+              <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800/80 space-y-1">
+                <div className="flex items-center justify-between text-xs text-slate-400 font-semibold">
+                  <span>Cambios Pendientes</span>
+                  {pendingChanges > 0 ? (
+                    <span className="text-[10px] text-amber-300 font-bold bg-amber-950 px-1.5 py-0.5 rounded border border-amber-800 animate-pulse">
+                      Por Subir
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-800">
+                      Al Día
+                    </span>
+                  )}
+                </div>
+                <div className="text-lg font-black text-amber-400">{pendingChanges} modificaciones</div>
+                <p className="text-[11px] text-slate-400">Listas para respaldarse en Firestore.</p>
+              </div>
+
+              <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800/80 space-y-1">
+                <div className="flex items-center justify-between text-xs text-slate-400 font-semibold">
+                  <span>Última Subida Cloud</span>
+                  <span className="text-[10px] text-purple-300 font-mono">Firestore</span>
+                </div>
+                <div className="text-xs font-bold text-slate-200 truncate pt-1">
+                  {FirestoreService.getSyncInfo().lastSyncAt
+                    ? new Date(FirestoreService.getSyncInfo().lastSyncAt!).toLocaleString('es-AR', {
+                        dateStyle: 'short',
+                        timeStyle: 'short'
+                      })
+                    : 'Aún no sincronizado'}
+                </div>
+                <p className="text-[11px] text-slate-400">Respaldo remoto en la nube.</p>
+              </div>
+            </div>
+
+            {/* Direct Upload Button */}
+            <div className="pt-2 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!navigator.onLine) {
+                    showNotification('Sin conexión a internet. Los datos siguen 100% seguros en tu base local.');
+                    return;
+                  }
+                  setIsUploadingCloud(true);
+                  try {
+                    const res = await FirestoreService.uploadAllToCloud();
+                    if (res.success) {
+                      showNotification('¡Base de datos local subida a la nube exitosamente!');
+                      setPendingChanges(0);
+                      onRefreshData();
+                    } else {
+                      showNotification(res.error || 'Error al subir a la nube.');
+                    }
+                  } catch (e: any) {
+                    showNotification(e?.message || 'Error al conectar con la nube.');
+                  } finally {
+                    setIsUploadingCloud(false);
+                  }
+                }}
+                disabled={isUploadingCloud}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-black flex items-center gap-2 shadow-lg shadow-emerald-950/50 transition-all"
+              >
+                {isUploadingCloud ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Subiendo a la Nube...</span>
+                  </>
+                ) : (
+                  <>
+                    <CloudUpload className="w-4 h-4" />
+                    <span>Subir Todos los Datos a la Nube Ahora</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
+
+          {/* Offline Local Backups & Demo Reset */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 space-y-4">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider pb-3 border-b border-slate-800 flex items-center gap-2">
+              <Download className="w-4 h-4 text-indigo-400" />
+              <span>Copias de Seguridad en Archivo Local (Sin Internet)</span>
+            </h3>
+            <p className="text-xs text-slate-400">
+              Descarga un archivo completo en formato JSON para transferir tus datos a otra PC o restaurar una copia previa en caso de formateo.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+              {/* Export JSON */}
+              <button
+                type="button"
+                onClick={handleExportBackup}
+                className="p-4 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-xl text-xs font-semibold text-white flex flex-col items-center justify-center gap-2 transition-colors"
+              >
+                <Download className="w-6 h-6 text-cyan-400" />
+                <span>Descargar Copia de Seguridad JSON</span>
+                <span className="text-[10px] text-slate-500">Guarda todos tus datos actuales</span>
+              </button>
+
+              {/* Import JSON */}
+              <label className="p-4 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-xl text-xs font-semibold text-white flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors">
+                <Upload className="w-6 h-6 text-indigo-400" />
+                <span>Restaurar Copia desde JSON</span>
+                <span className="text-[10px] text-slate-500">Cargar un archivo .json previo</span>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleImportBackup}
+                  className="hidden"
+                />
+              </label>
+
+              {/* Reset Demo Data */}
+              <button
+                type="button"
+                onClick={handleResetDemo}
+                className="p-4 bg-slate-950 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-800 rounded-xl text-xs font-semibold text-slate-300 hover:text-rose-300 flex flex-col items-center justify-center gap-2 transition-colors"
+              >
+                <RotateCcw className="w-6 h-6 text-rose-400" />
+                <span>Restablecer Catálogo Demo</span>
+                <span className="text-[10px] text-slate-500">Reiniciar ejemplos iniciales</span>
+              </button>
+            </div>
+          </div>
+
+          <CloudSyncModal
+            isOpen={isCloudSyncModalOpen}
+            onClose={() => setIsCloudSyncModalOpen(false)}
+            onDataRefreshed={() => {
+              setSettings(StorageService.getSettings());
+              setPendingChanges(StorageService.getPendingChangesCount());
+              onRefreshData();
+            }}
+          />
         </div>
       )}
     </div>
