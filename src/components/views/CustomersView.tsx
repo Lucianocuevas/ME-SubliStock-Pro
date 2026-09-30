@@ -9,7 +9,8 @@ import {
   Search,
   DollarSign,
   Package,
-  Edit2
+  Edit2,
+  CreditCard
 } from 'lucide-react';
 import { Customer, CustomerOrder } from '../../types';
 import { formatCurrency, calculateOrderUrgency } from '../../services/storageService';
@@ -20,6 +21,8 @@ interface Props {
   onOpenNewCustomer: () => void;
   onEditCustomer: (customer: Customer) => void;
   onOpenNewOrderForCustomer: (customerId: string) => void;
+  onNavigateToCurrentAccounts?: (customerId?: string) => void;
+  onOpenNewPayment?: (customerId: string) => void;
 }
 
 export const CustomersView: React.FC<Props> = ({
@@ -27,7 +30,9 @@ export const CustomersView: React.FC<Props> = ({
   orders,
   onOpenNewCustomer,
   onEditCustomer,
-  onOpenNewOrderForCustomer
+  onOpenNewOrderForCustomer,
+  onNavigateToCurrentAccounts,
+  onOpenNewPayment
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -187,7 +192,28 @@ export const CustomersView: React.FC<Props> = ({
               </div>
 
               {/* Action buttons */}
-              <div className="pt-3 border-t border-slate-800 flex items-center gap-2">
+              <div className="pt-3 border-t border-slate-800 flex items-center gap-1.5 flex-wrap">
+                {onNavigateToCurrentAccounts && (
+                  <button
+                    onClick={() => onNavigateToCurrentAccounts(customer.id)}
+                    className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors flex items-center justify-center"
+                    title="Ver Cuenta Corriente & Extracto"
+                  >
+                    <CreditCard className="w-4 h-4 text-emerald-400" />
+                  </button>
+                )}
+
+                {onOpenNewPayment && customer.currentBalance > 0 && (
+                  <button
+                    onClick={() => onOpenNewPayment(customer.id)}
+                    className="px-2.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                    title="Registrar Cobro"
+                  >
+                    <DollarSign className="w-3.5 h-3.5" />
+                    <span>Cobro</span>
+                  </button>
+                )}
+
                 {waPhone ? (
                   <a
                     href={`https://wa.me/${waPhone}?text=${waMessage}`}

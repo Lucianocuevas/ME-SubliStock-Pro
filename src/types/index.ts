@@ -270,3 +270,101 @@ export interface MonthlyReportSummary {
   topProducts: Array<{ name: string; units: number; revenue: number }>;
   materialUsageEstimates: Array<{ material: MaterialType; units: number }>;
 }
+
+export type AccountMovementType = 
+  | 'cargo_pedido'       // Cargo por pedido a cliente (Aumenta saldo adeudado)
+  | 'pago_recibido'      // Cobranza o pago recibido de cliente (Disminuye saldo)
+  | 'pago_seña'          // Anticipo / seña inicial de pedido
+  | 'nota_credito'       // Bonificación o descuento a favor del cliente
+  | 'nota_debito'        // Recargo o gasto adicional
+  | 'saldo_inicial'      // Saldo de apertura de cuenta corriente
+  | 'compra_proveedor'   // Factura o compra a proveedor (Aumenta pasivo)
+  | 'pago_proveedor';    // Pago emitido a proveedor (Cancela pasivo)
+
+export type PaymentMethodType = 
+  | 'efectivo'
+  | 'transferencia'
+  | 'mercadopago'
+  | 'cheque'
+  | 'tarjeta'
+  | 'otro';
+
+export interface AccountMovement {
+  id: string;
+  entityType: 'customer' | 'supplier';
+  entityId: string;
+  entityName: string;
+  date: string; // ISO string
+  type: AccountMovementType;
+  concept: string;
+  referenceNumber?: string; // N° de Recibo, N° de Pedido, Transferencia, Cheque
+  debit: number;            // Debe (+ deuda del cliente / - deuda con proveedor)
+  credit: number;           // Haber (- deuda del cliente / + deuda con proveedor)
+  balanceAfter: number;     // Saldo resultante histórico
+  paymentMethod?: PaymentMethodType;
+  notes?: string;
+  createdByName?: string;
+}
+
+export type LabelPreset = 
+  | 'a4_3x8'   // 24 etiquetas (64 x 33.8 mm) estándar hojas autoadhesivas
+  | 'a4_4x10'  // 40 etiquetas (48.5 x 25.4 mm) mini código de barras
+  | 'a4_3x7'   // 21 etiquetas (70 x 38 mm) medianas
+  | 'a4_2x5'   // 10 etiquetas (105 x 57 mm) grandes con descripción
+  | 'custom';  // Personalizado por el usuario
+
+export interface ProductLabelSettings {
+  preset: LabelPreset;
+  // Dimensiones de grilla en hoja A4 (210 x 297 mm)
+  columns: number;
+  rows: number;
+  labelWidthMm: number;
+  labelHeightMm: number;
+  marginTopMm: number;
+  marginLeftMm: number;
+  marginRightMm?: number;
+  marginBottomMm?: number;
+  gapHorizontalMm: number;
+  gapVerticalMm: number;
+  showBorder: boolean;
+
+  // Campos a incluir en la etiqueta (Requeridos por el usuario)
+  includeBarcode: boolean;
+  includePrice: boolean;
+  includeProductName: boolean;
+  includeLogo: boolean;
+
+  // Campos adicionales opcionales
+  includeWorkshopName: boolean;
+  includeSku: boolean;
+  includeCategoryOrMaterial: boolean;
+  includeSizeColor: boolean;
+  includeCustomText: boolean;
+  customText?: string;
+
+  // Estilo y tipografía
+  barcodeFormat: 'CODE128' | 'EAN13' | 'CODE39';
+  showBarcodeValue: boolean; // Mostrar texto del código debajo de las barras
+  pricePrefix: string;
+  fontSize: 'small' | 'medium' | 'large';
+  textAlign: 'left' | 'center';
+  colorTheme: 'monochrome' | 'dark' | 'accent';
+}
+
+export interface LocalOfflineStats {
+  isOnline: boolean;
+  pendingChangesCount: number;
+  lastLocalSaveAt: string | null;
+  lastCloudUploadAt: string | null;
+  totalLocalRecords: {
+    products: number;
+    customers: number;
+    suppliers: number;
+    orders: number;
+    purchases: number;
+    dailySales: number;
+    quotations: number;
+    accountMovements: number;
+  };
+}
+

@@ -10,7 +10,10 @@ import {
   Settings,
   FileText,
   Shield,
-  Database
+  Database,
+  CreditCard,
+  Github,
+  Smartphone
 } from 'lucide-react';
 
 interface Props {
@@ -20,6 +23,7 @@ interface Props {
   activeOrdersCount: number;
   productsCount: number;
   quotationsCount?: number;
+  debtorCustomersCount?: number;
 }
 
 export const NavigationTabs: React.FC<Props> = ({
@@ -28,7 +32,8 @@ export const NavigationTabs: React.FC<Props> = ({
   criticalAlertsCount,
   activeOrdersCount,
   productsCount,
-  quotationsCount = 0
+  quotationsCount = 0,
+  debtorCustomersCount = 0
 }) => {
   const tabs = [
     {
@@ -58,6 +63,13 @@ export const NavigationTabs: React.FC<Props> = ({
       badgeColor: 'bg-cyan-600 text-white'
     },
     {
+      id: 'cuentas_corrientes',
+      label: 'Cuentas Corrientes',
+      icon: CreditCard,
+      badge: debtorCustomersCount > 0 ? `${debtorCustomersCount}` : null,
+      badgeColor: 'bg-emerald-900/90 text-emerald-300 border border-emerald-700'
+    },
+    {
       id: 'quotations',
       label: 'Presupuestos (PDF)',
       icon: FileText,
@@ -75,6 +87,20 @@ export const NavigationTabs: React.FC<Props> = ({
       label: 'Clientes & WhatsApp',
       icon: Users,
       badge: null
+    },
+    {
+      id: 'github_deploy',
+      label: 'Deploy en GitHub',
+      icon: Github,
+      badge: 'Pages',
+      badgeColor: 'bg-slate-800 text-cyan-300 border border-cyan-800/60'
+    },
+    {
+      id: 'multi_device',
+      label: 'PC & Móvil (Android/iOS)',
+      icon: Smartphone,
+      badge: 'Nube',
+      badgeColor: 'bg-emerald-950 text-emerald-300 border border-emerald-800'
     },
     {
       id: 'users',

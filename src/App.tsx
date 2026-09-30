@@ -14,7 +14,8 @@ import {
   DailySale,
   StockAlert,
   Quotation,
-  AppUser
+  AppUser,
+  AccountMovement
 } from './types';
 import { Header } from './components/Header';
 import { NavigationTabs } from './components/NavigationTabs';
@@ -29,6 +30,10 @@ import { SettingsView } from './components/views/SettingsView';
 import { QuotationsView } from './components/views/QuotationsView';
 import { UsersView } from './components/views/UsersView';
 import { BackendCloudView } from './components/views/BackendCloudView';
+import { CurrentAccountsView } from './components/views/CurrentAccountsView';
+import { GitHubDeployView } from './components/views/GitHubDeployView';
+import { MultiDeviceView } from './components/views/MultiDeviceView';
+import { FirestoreService } from './services/firestoreService';
 
 // Modals
 import { NewDailySaleModal } from './components/modals/NewDailySaleModal';
@@ -41,6 +46,7 @@ import { NewCustomerModal } from './components/modals/NewCustomerModal';
 import { NewSupplierModal } from './components/modals/NewSupplierModal';
 import { NewQuotationModal } from './components/modals/NewQuotationModal';
 import { QuotationPrintModal } from './components/modals/QuotationPrintModal';
+import { NewPaymentModal } from './components/modals/NewPaymentModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -54,6 +60,7 @@ export default function App() {
   const [dailySales, setDailySales] = useState<DailySale[]>([]);
   const [stockAlerts, setStockAlerts] = useState<StockAlert[]>([]);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [accountMovements, setAccountMovements] = useState<AccountMovement[]>([]);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [currentUser, setCurrentUser] = useState<AppUser>(StorageService.getCurrentUser());
   const [settings, setSettings] = useState(StorageService.getSettings());
@@ -74,6 +81,11 @@ export default function App() {
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
   const [supplierToEdit, setSupplierToEdit] = useState<Supplier | null>(null);
 
+  // Payment / Cta Cte Modal
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentEntityType, setPaymentEntityType] = useState<'customer' | 'supplier'>('customer');
+  const [paymentEntityId, setPaymentEntityId] = useState<string | undefined>(undefined);
+
   // Quotation Modals
   const [isNewQuotationOpen, setIsNewQuotationOpen] = useState(false);
   const [isPrintQuotationOpen, setIsPrintQuotationOpen] = useState(false);
@@ -89,6 +101,7 @@ export default function App() {
     setDailySales(StorageService.getDailySales());
     setStockAlerts(StorageService.getStockAlerts());
     setQuotations(StorageService.getQuotations());
+    setAccountMovements(StorageService.getAccountMovements());
     setUsers(StorageService.getUsers());
     setCurrentUser(StorageService.getCurrentUser());
     setSettings(StorageService.getSettings());
@@ -107,8 +120,18 @@ export default function App() {
     window.addEventListener('sublistock_suppliers_updated', handleUpdate);
     window.addEventListener('sublistock_settings_updated', handleUpdate);
     window.addEventListener('sublistock_quotes_updated', handleUpdate);
+    window.addEventListener('sublistock_movements_updated', handleUpdate);
     window.addEventListener('sublistock_users_updated', handleUpdate);
     window.addEventListener('sublistock_auth_changed', handleUpdate);
+
+    // Listen to real-time sync events from other devices (PC, Android, iOS) via Firestore
+    const unsubscribeCloud = FirestoreService.listenToRemoteSync(() => {
+      FirestoreService.downloadAllFromCloud().then(res => {
+        if (res.success) {
+          loadData();
+        }
+      });
+    });
 
     return () => {
       window.removeEventListener('sublistock_products_updated', handleUpdate);
@@ -119,8 +142,10 @@ export default function App() {
       window.removeEventListener('sublistock_suppliers_updated', handleUpdate);
       window.removeEventListener('sublistock_settings_updated', handleUpdate);
       window.removeEventListener('sublistock_quotes_updated', handleUpdate);
+      window.removeEventListener('sublistock_movements_updated', handleUpdate);
       window.removeEventListener('sublistock_users_updated', handleUpdate);
       window.removeEventListener('sublistock_auth_changed', handleUpdate);
+      if (unsubscribeCloud) unsubscribeCloud();
     };
   }, [loadData]);
 
@@ -192,6 +217,7 @@ export default function App() {
       {/* Top Header */}
       <Header
         workshopName={settings.workshopName}
+        logoUrl={settings.logoUrl}
         criticalStockCount={criticalStockCount}
         urgentOrdersCount={urgentOrdersCount}
         currentUser={currentUser}
@@ -211,6 +237,7 @@ export default function App() {
         activeOrdersCount={activeOrders.length}
         productsCount={products.length}
         quotationsCount={quotations.length}
+        debtorCustomersCount={customers.filter(c => c.currentBalance > 0).length}
       />
 
       {/* Main Content View */}
@@ -227,6 +254,7 @@ export default function App() {
             onOpenNewQuotation={() => setIsNewQuotationOpen(true)}
             onNavigateTab={setActiveTab}
             onSelectOrder={handleSelectOrder}
+            onDismissAllAlerts={loadData}
           />
         )}
 
@@ -237,6 +265,7 @@ export default function App() {
             onEditProduct={handleEditProduct}
             onQuickRestock={handleQuickRestock}
             onRefreshData={loadData}
+            onNavigateToLabels={() => setActiveTab('settings')}
           />
         )}
 
@@ -247,6 +276,7 @@ export default function App() {
             onQuickRestock={handleQuickRestock}
             onOpenPurchaseOrder={handleOpenPurchaseOrder}
             onNavigateTab={setActiveTab}
+            onRefreshData={loadData}
           />
         )}
 
@@ -259,6 +289,21 @@ export default function App() {
               StorageService.updateOrderStatus(orderId, status);
               loadData();
             }}
+          />
+        )}
+
+        {activeTab === 'cuentas_corrientes' && (
+          <CurrentAccountsView
+            customers={customers}
+            suppliers={suppliers}
+            movements={accountMovements}
+            settings={settings}
+            onOpenNewPayment={(entityType, entityId) => {
+              setPaymentEntityType(entityType || 'customer');
+              setPaymentEntityId(entityId);
+              setIsPaymentModalOpen(true);
+            }}
+            onDataUpdated={loadData}
           />
         )}
 
@@ -296,7 +341,23 @@ export default function App() {
             onOpenNewCustomer={handleOpenNewCustomer}
             onEditCustomer={handleEditCustomer}
             onOpenNewOrderForCustomer={handleOpenNewOrderForCustomer}
+            onNavigateToCurrentAccounts={customerId => {
+              setActiveTab('cuentas_corrientes');
+            }}
+            onOpenNewPayment={customerId => {
+              setPaymentEntityType('customer');
+              setPaymentEntityId(customerId);
+              setIsPaymentModalOpen(true);
+            }}
           />
+        )}
+
+        {activeTab === 'github_deploy' && (
+          <GitHubDeployView />
+        )}
+
+        {activeTab === 'multi_device' && (
+          <MultiDeviceView />
         )}
 
         {activeTab === 'users' && (
@@ -375,6 +436,16 @@ export default function App() {
         onClose={() => setIsPrintQuotationOpen(false)}
         quotation={quotationToPrint}
         settings={settings}
+      />
+
+      <NewPaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        customers={customers}
+        suppliers={suppliers}
+        initialEntityType={paymentEntityType}
+        initialEntityId={paymentEntityId}
+        onPaymentSaved={loadData}
       />
 
       <NewProductModal

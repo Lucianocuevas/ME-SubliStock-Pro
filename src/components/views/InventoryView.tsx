@@ -11,7 +11,10 @@ import {
   Package,
   Layers,
   Sparkles,
-  ArrowUpDown
+  ArrowUpDown,
+  BellOff,
+  Bell,
+  Tag
 } from 'lucide-react';
 import { ProductItem, ProductCategory, MaterialType } from '../../types';
 import { StorageService, formatCurrency } from '../../services/storageService';
@@ -24,6 +27,7 @@ interface Props {
   onEditProduct: (product: ProductItem) => void;
   onQuickRestock: (product: ProductItem) => void;
   onRefreshData: () => void;
+  onNavigateToLabels?: () => void;
 }
 
 export const InventoryView: React.FC<Props> = ({
@@ -31,7 +35,8 @@ export const InventoryView: React.FC<Props> = ({
   onOpenNewProduct,
   onEditProduct,
   onQuickRestock,
-  onRefreshData
+  onRefreshData,
+  onNavigateToLabels
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -41,6 +46,8 @@ export const InventoryView: React.FC<Props> = ({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Filtering logic
+  const dismissedSet = useMemo(() => new Set(StorageService.getSettings().dismissedAlertProductIds || []), [products]);
+
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       // Text search
@@ -111,6 +118,17 @@ export const InventoryView: React.FC<Props> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          {onNavigateToLabels && (
+            <button
+              onClick={onNavigateToLabels}
+              className="px-3.5 py-2 bg-pink-950/40 hover:bg-pink-900/60 text-pink-300 border border-pink-700/50 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+              title="Configurar formato y diseñar etiquetas A4 para imprimir"
+            >
+              <Tag className="w-4 h-4 text-pink-400" />
+              <span>Etiquetas A4</span>
+            </button>
+          )}
+
           <button
             onClick={handleExportExcel}
             className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
@@ -281,6 +299,7 @@ export const InventoryView: React.FC<Props> = ({
                   const isOutOfStock = product.currentStock === 0;
                   const isCritical = product.currentStock <= product.minStock;
                   const isWarning = product.currentStock <= product.minStock * 1.4;
+                  const isAlertDismissed = dismissedSet.has(product.id);
                   const stockPercent = Math.min(100, Math.round((product.currentStock / Math.max(1, product.minStock * 2)) * 100));
 
                   return (
@@ -355,7 +374,17 @@ export const InventoryView: React.FC<Props> = ({
                       </td>
 
                       <td className="py-3.5 px-3 text-center">
-                        {isOutOfStock ? (
+                        {isAlertDismissed && (isOutOfStock || isCritical || isWarning) ? (
+                          <div className="space-y-0.5">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700 inline-flex items-center gap-1">
+                              <BellOff className="w-3 h-3 text-amber-400" />
+                              Silenciada
+                            </span>
+                            <span className="block text-[9px] text-slate-500 font-mono">
+                              {isOutOfStock ? 'Stock 0' : `Stock ${product.currentStock}`}
+                            </span>
+                          </div>
+                        ) : isOutOfStock ? (
                           <span className="px-2 py-0.5 rounded text-[10px] font-black bg-rose-950 text-rose-300 border border-rose-700 animate-pulse">
                             ¡AGOTADO!
                           </span>
@@ -376,6 +405,33 @@ export const InventoryView: React.FC<Props> = ({
 
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Toggle silence / restore alert button */}
+                          {(isOutOfStock || isCritical || isWarning) && (
+                            isAlertDismissed ? (
+                              <button
+                                onClick={() => {
+                                  StorageService.restoreStockAlert(product.id);
+                                  onRefreshData();
+                                }}
+                                className="p-1 text-cyan-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                                title="Reactivar alerta de este insumo"
+                              >
+                                <Bell className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  StorageService.dismissStockAlert(product.id);
+                                  onRefreshData();
+                                }}
+                                className="p-1 text-slate-500 hover:text-amber-400 hover:bg-slate-800 rounded transition-colors"
+                                title="Sacar / Silenciar alerta de este insumo"
+                              >
+                                <BellOff className="w-3.5 h-3.5" />
+                              </button>
+                            )
+                          )}
+
                           <button
                             onClick={() => onQuickRestock(product)}
                             className="px-2.5 py-1 bg-orange-950/60 hover:bg-orange-600 border border-orange-800/60 hover:border-orange-500 text-orange-200 hover:text-white rounded text-[11px] font-semibold flex items-center gap-1 transition-all"

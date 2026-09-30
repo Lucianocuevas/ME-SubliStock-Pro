@@ -1,9 +1,9 @@
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { ProductItem, CustomerOrder, DailySale, PurchaseOrder, MonthlyReportSummary } from '../types';
+import { ProductItem, CustomerOrder, DailySale, PurchaseOrder, MonthlyReportSummary, AccountMovement } from '../types';
 import { CATEGORY_LABELS, MATERIAL_LABELS } from '../data/initialData';
-import { formatCurrency } from './storageService';
+import { formatCurrency, AppSettings } from './storageService';
 
 export class ExportService {
   /**
@@ -347,5 +347,290 @@ export class ExportService {
     }
 
     doc.save(`Reporte_Sublimacion_${summary.monthName}_${summary.year}.pdf`);
+  }
+
+  /**
+   * Export Account Statement to Excel (.xlsx)
+   */
+  static exportAccountStatementToExcel(
+    entityName: string,
+    entityType: 'customer' | 'supplier',
+    movements: AccountMovement[],
+    currentBalance: number,
+    settings?: AppSettings,
+    contactInfo?: { phone?: string; email?: string; address?: string; taxId?: string }
+  ): void {
+    const wb = XLSX.utils.book_new();
+    const sorted = [...movements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const totalDebits = sorted.reduce((acc, m) => acc + (m.debit || 0), 0);
+    const totalCredits = sorted.reduce((acc, m) => acc + (m.credit || 0), 0);
+
+    const sheetData: (string | number)[][] = [
+      [(settings?.workshopName || 'SubliStudio Taller Gráfico & Sublimación').toUpperCase()],
+      ['EXTRACTO DE CUENTA CORRIENTE'],
+      ['Fecha de Emisión:', new Date().toLocaleDateString('es-AR') + ' ' + new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })],
+      [''],
+      [entityType === 'customer' ? 'CLIENTE:' : 'PROVEEDOR:', entityName],
+      ['Teléfono / WhatsApp:', contactInfo?.phone || '-'],
+      ['Email:', contactInfo?.email || '-'],
+      ['Dirección:', contactInfo?.address || '-'],
+      ['CUIT / Identificación:', contactInfo?.taxId || '-'],
+      [''],
+      ['RESUMEN DE SALDO'],
+      ['Total Debe (Cargos acumulados):', totalDebits],
+      ['Total Haber (Pagos acumulados):', totalCredits],
+      ['Saldo Actual:', currentBalance],
+      ['Estado:', currentBalance > 0 ? (entityType === 'customer' ? 'Saldo Pendiente Adeudado' : 'Saldo a Pagar') : 'Cuenta al Día'],
+      [''],
+      ['DETALLE DE MOVIMIENTOS'],
+      ['Fecha', 'Comprobante / Ref', 'Tipo', 'Concepto', 'Medio de Pago', 'Debe ($)', 'Haber ($)', 'Saldo ($)', 'Observaciones']
+    ];
+
+    for (const m of sorted) {
+      sheetData.push([
+        new Date(m.date).toLocaleDateString('es-AR'),
+        m.referenceNumber || '-',
+        m.type.replace('_', ' ').toUpperCase(),
+        m.concept,
+        m.paymentMethod ? m.paymentMethod.toUpperCase() : '-',
+        m.debit || 0,
+        m.credit || 0,
+        m.balanceAfter,
+        m.notes || ''
+      ]);
+    }
+
+    if (settings?.bankDetails) {
+      sheetData.push(['']);
+      sheetData.push(['DATOS BANCARIOS PARA TRANSFERENCIA:']);
+      sheetData.push([settings.bankDetails]);
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+    ws['!cols'] = [
+      { wch: 14 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 45 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 35 }
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, 'Cuenta Corriente');
+
+    const cleanName = entityName.replace(/[^a-zA-Z0-9]/g, '_');
+    XLSX.writeFile(wb, `Extracto_CC_${cleanName}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  }
+
+  /**
+   * Export Account Statement to PDF with Workshop Branding
+   */
+  static exportAccountStatementToPDF(
+    entityName: string,
+    entityType: 'customer' | 'supplier',
+    movements: AccountMovement[],
+    currentBalance: number,
+    settings?: AppSettings,
+    contactInfo?: { phone?: string; email?: string; address?: string; taxId?: string }
+  ): void {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const workshopName = settings?.workshopName || 'SubliStudio Taller Gráfico';
+    const sorted = [...movements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const totalDebits = sorted.reduce((acc, m) => acc + (m.debit || 0), 0);
+    const totalCredits = sorted.reduce((acc, m) => acc + (m.credit || 0), 0);
+
+    // Top Header Banner
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(0, 0, 210, 36, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(workshopName, 14, 15);
+
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(203, 213, 225); // slate-300
+    const subtitle = [
+      settings?.slogan || 'Sublimación, Estampado Textil & Merchandising',
+      `CUIT: ${settings?.taxId || '30-71987654-2'} | Tel: ${settings?.phone || ''} | ${settings?.email || ''}`,
+      settings?.address ? `${settings.address}, ${settings?.city || ''}` : ''
+    ].filter(Boolean).join(' • ');
+    doc.text(subtitle, 14, 23);
+
+    // Document Title Badge
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(251, 146, 60); // orange-400
+    doc.text('ESTADO DE CUENTA CORRIENTE', 14, 31);
+
+    const emissionDate = new Date().toLocaleDateString('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(148, 163, 184);
+    doc.text(`Fecha de Emisión: ${emissionDate}`, 196, 31, { align: 'right' });
+
+    // Client/Supplier Information Box
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.roundedRect(14, 42, 182, 26, 2, 2, 'FD');
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${entityType === 'customer' ? 'CLIENTE:' : 'PROVEEDOR:'} ${entityName}`, 18, 50);
+
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105); // slate-600
+
+    const col1 = [
+      contactInfo?.phone ? `Tel / WhatsApp: ${contactInfo.phone}` : null,
+      contactInfo?.email ? `Email: ${contactInfo.email}` : null
+    ].filter(Boolean).join('   |   ');
+
+    const col2 = [
+      contactInfo?.address ? `Dirección: ${contactInfo.address}` : null,
+      contactInfo?.taxId ? `CUIT / DNI: ${contactInfo.taxId}` : null
+    ].filter(Boolean).join('   |   ');
+
+    if (col1) doc.text(col1, 18, 57);
+    if (col2) doc.text(col2, 18, 63);
+
+    // Summary Cards (Total Debe, Total Haber, Saldo Actual)
+    const startYSummary = 72;
+    // Card 1: Total Facturado / Cargos
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(14, startYSummary, 56, 18, 2, 2, 'F');
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text('TOTAL CARGOS (DEBE)', 18, startYSummary + 6);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatCurrency(totalDebits), 18, startYSummary + 14);
+
+    // Card 2: Total Pagos / Abonos
+    doc.setFillColor(236, 253, 245);
+    doc.roundedRect(77, startYSummary, 56, 18, 2, 2, 'F');
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(5, 150, 105);
+    doc.text('TOTAL COBROS / PAGOS (HABER)', 81, startYSummary + 6);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(4, 120, 87);
+    doc.text(formatCurrency(totalCredits), 81, startYSummary + 14);
+
+    // Card 3: Saldo Actual
+    const isDebt = currentBalance > 0;
+    if (isDebt) {
+      doc.setFillColor(255, 247, 237);
+    } else {
+      doc.setFillColor(240, 253, 244);
+    }
+    doc.roundedRect(140, startYSummary, 56, 18, 2, 2, 'F');
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    if (isDebt) {
+      doc.setTextColor(194, 65, 12);
+    } else {
+      doc.setTextColor(21, 128, 61);
+    }
+    doc.text('SALDO ACTUAL', 144, startYSummary + 6);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    if (isDebt) {
+      doc.setTextColor(194, 65, 12);
+    } else {
+      doc.setTextColor(21, 128, 61);
+    }
+    doc.text(formatCurrency(currentBalance), 144, startYSummary + 14);
+
+    // Table of movements
+    autoTable(doc, {
+      startY: startYSummary + 24,
+      head: [['Fecha', 'Comprobante', 'Concepto', 'Medio de Pago', 'Debe (+)', 'Haber (-)', 'Saldo Acum.']],
+      body: sorted.map(m => [
+        new Date(m.date).toLocaleDateString('es-AR'),
+        m.referenceNumber || '-',
+        m.concept,
+        m.paymentMethod ? m.paymentMethod.toUpperCase() : '-',
+        m.debit > 0 ? formatCurrency(m.debit) : '-',
+        m.credit > 0 ? formatCurrency(m.credit) : '-',
+        formatCurrency(m.balanceAfter)
+      ]),
+      headStyles: {
+        fillColor: [15, 23, 42],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 8,
+        halign: 'left'
+      },
+      columnStyles: {
+        0: { cellWidth: 20 },
+        1: { cellWidth: 26 },
+        2: { cellWidth: 62 },
+        3: { cellWidth: 24 },
+        4: { cellWidth: 22, halign: 'right' },
+        5: { cellWidth: 22, halign: 'right' },
+        6: { cellWidth: 24, halign: 'right', fontStyle: 'bold' }
+      },
+      bodyStyles: {
+        fontSize: 7.5,
+        cellPadding: 2.2,
+        textColor: [30, 41, 59]
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252]
+      }
+    });
+
+    const finalY = (doc as any).lastAutoTable?.finalY || 160;
+
+    // Bank Details Banner if pending debt exists
+    if (settings?.bankDetails && finalY < 235) {
+      doc.setFillColor(241, 245, 249);
+      doc.setDrawColor(203, 213, 225);
+      doc.roundedRect(14, finalY + 8, 182, 18, 2, 2, 'FD');
+
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(15, 23, 42);
+      doc.text('DATOS BANCARIOS PARA PAGO / TRANSFERENCIA:', 18, finalY + 14);
+
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(71, 85, 105);
+      doc.text(settings.bankDetails, 18, finalY + 21);
+    }
+
+    // Page numbers
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text(
+        `${workshopName} · Extracto de Cuenta Corriente | Página ${i} de ${totalPages}`,
+        105,
+        290,
+        { align: 'center' }
+      );
+    }
+
+    const cleanName = entityName.replace(/[^a-zA-Z0-9]/g, '_');
+    doc.save(`Estado_Cuenta_${cleanName}.pdf`);
   }
 }

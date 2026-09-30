@@ -8,7 +8,12 @@ import {
   StockAlert,
   UrgencyLevel,
   AppUser,
-  Quotation
+  Quotation,
+  AccountMovement,
+  AccountMovementType,
+  PaymentMethodType,
+  ProductLabelSettings,
+  LabelPreset
 } from '../types';
 import {
   INITIAL_PRODUCTS,
@@ -18,7 +23,8 @@ import {
   INITIAL_PURCHASES,
   INITIAL_DAILY_SALES,
   INITIAL_USERS,
-  INITIAL_QUOTATIONS
+  INITIAL_QUOTATIONS,
+  INITIAL_ACCOUNT_MOVEMENTS
 } from '../data/initialData';
 
 const STORAGE_KEYS = {
@@ -31,35 +37,138 @@ const STORAGE_KEYS = {
   SETTINGS: 'sublistock_settings_v1',
   USERS: 'sublistock_users_v1',
   CURRENT_USER_ID: 'sublistock_current_user_v1',
-  QUOTATIONS: 'sublistock_quotations_v1'
+  QUOTATIONS: 'sublistock_quotations_v1',
+  ACCOUNT_MOVEMENTS: 'sublistock_account_movements_v1'
+};
+
+export const LABEL_PRESETS_CONFIG: Record<LabelPreset, Partial<ProductLabelSettings>> = {
+  a4_3x8: {
+    preset: 'a4_3x8',
+    columns: 3,
+    rows: 8,
+    labelWidthMm: 64,
+    labelHeightMm: 33.8,
+    marginTopMm: 12,
+    marginLeftMm: 6,
+    gapHorizontalMm: 3,
+    gapVerticalMm: 0,
+    showBorder: true
+  },
+  a4_4x10: {
+    preset: 'a4_4x10',
+    columns: 4,
+    rows: 10,
+    labelWidthMm: 48.5,
+    labelHeightMm: 25.4,
+    marginTopMm: 13,
+    marginLeftMm: 8,
+    gapHorizontalMm: 2,
+    gapVerticalMm: 0,
+    showBorder: true
+  },
+  a4_3x7: {
+    preset: 'a4_3x7',
+    columns: 3,
+    rows: 7,
+    labelWidthMm: 70,
+    labelHeightMm: 38.1,
+    marginTopMm: 15,
+    marginLeftMm: 0,
+    gapHorizontalMm: 0,
+    gapVerticalMm: 0,
+    showBorder: true
+  },
+  a4_2x5: {
+    preset: 'a4_2x5',
+    columns: 2,
+    rows: 5,
+    labelWidthMm: 105,
+    labelHeightMm: 57,
+    marginTopMm: 6,
+    marginLeftMm: 0,
+    gapHorizontalMm: 0,
+    gapVerticalMm: 0,
+    showBorder: true
+  },
+  custom: {
+    preset: 'custom'
+  }
+};
+
+export const DEFAULT_LABEL_SETTINGS: ProductLabelSettings = {
+  preset: 'a4_3x8',
+  columns: 3,
+  rows: 8,
+  labelWidthMm: 64,
+  labelHeightMm: 33.8,
+  marginTopMm: 12,
+  marginLeftMm: 6,
+  gapHorizontalMm: 3,
+  gapVerticalMm: 0,
+  showBorder: true,
+
+  includeBarcode: true,
+  includePrice: true,
+  includeProductName: true,
+  includeLogo: true,
+
+  includeWorkshopName: true,
+  includeSku: true,
+  includeCategoryOrMaterial: false,
+  includeSizeColor: true,
+  includeCustomText: false,
+  customText: 'Sublimación & Merchandising',
+
+  barcodeFormat: 'CODE128',
+  showBarcodeValue: true,
+  pricePrefix: '$',
+  fontSize: 'medium',
+  textAlign: 'center',
+  colorTheme: 'monochrome'
 };
 
 export interface AppSettings {
   workshopName: string;
+  slogan?: string;
   currencySymbol: string;
   phone: string;
+  whatsapp?: string;
   email: string;
   address: string;
+  city?: string;
   taxId: string;
+  taxCondition?: string;
   taxRatePercent: number;
   logoUrl?: string;
   bankDetails?: string;
   termsAndConditions?: string;
   website?: string;
+  instagram?: string;
+  enableStockAlerts?: boolean;
+  dismissedAlertProductIds?: string[];
+  labelSettings?: ProductLabelSettings;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
   workshopName: 'SubliStudio Taller Gráfico & Sublimación',
+  slogan: 'Sublimación, Estampado Textil & Merchandising Personalizado',
   currencySymbol: '$',
   phone: '+54 11 4567-8901',
+  whatsapp: '+54 9 11 4567-8901',
   email: 'contacto@sublistudio.com',
-  address: 'Av. Corrientes 3420, CABA',
+  address: 'Av. Corrientes 3420',
+  city: 'CABA, Buenos Aires',
   taxId: '30-71987654-2',
+  taxCondition: 'Responsable Inscripto',
   taxRatePercent: 0,
   logoUrl: '',
   bankDetails: 'Banco Galicia • CBU: 0070123456789012345678 • Alias: SUBLISTUDIO.OFICIAL',
   termsAndConditions: 'Presupuesto válido por 15 días corridos. Precios incluyen insumos e impresión en alta definición. Seña 50% al aprobar boceto digital, saldo contra entrega.',
-  website: 'www.sublistudio.com'
+  website: 'www.sublistudio.com',
+  instagram: '@sublistudio.ok',
+  enableStockAlerts: true,
+  dismissedAlertProductIds: [],
+  labelSettings: DEFAULT_LABEL_SETTINGS
 };
 
 export class StorageService {
@@ -120,8 +229,14 @@ export class StorageService {
     }
   }
 
-  // ALERTS CALCULATION
-  static getStockAlerts(): StockAlert[] {
+  // ALERTS CALCULATION & DISMISSAL
+  static getStockAlerts(includeDismissed = false): StockAlert[] {
+    const settings = this.getSettings();
+    if (!includeDismissed && settings.enableStockAlerts === false) {
+      return [];
+    }
+
+    const dismissedSet = new Set(settings.dismissedAlertProductIds || []);
     const products = this.getProducts();
     const orders = this.getCustomerOrders().filter(
       o => o.productionStatus !== 'entregado' && o.productionStatus !== 'cancelado'
@@ -138,6 +253,10 @@ export class StorageService {
     const alerts: StockAlert[] = [];
 
     for (const prod of products) {
+      if (!includeDismissed && dismissedSet.has(prod.id)) {
+        continue;
+      }
+
       const demand = pendingDemand[prod.id] || 0;
       const effectiveStock = prod.currentStock;
 
@@ -170,6 +289,51 @@ export class StorageService {
       const rank = { out_of_stock: 0, critical: 1, warning: 2 };
       return rank[a.severity] - rank[b.severity];
     });
+  }
+
+  static getDismissedStockAlerts(): StockAlert[] {
+    const settings = this.getSettings();
+    const dismissedSet = new Set(settings.dismissedAlertProductIds || []);
+    if (dismissedSet.size === 0) return [];
+
+    const allAlerts = this.getStockAlerts(true);
+    return allAlerts.filter(a => dismissedSet.has(a.product.id));
+  }
+
+  static dismissStockAlert(productId: string): void {
+    const settings = this.getSettings();
+    const current = settings.dismissedAlertProductIds || [];
+    if (!current.includes(productId)) {
+      settings.dismissedAlertProductIds = [...current, productId];
+      this.saveSettings(settings);
+    }
+  }
+
+  static restoreStockAlert(productId: string): void {
+    const settings = this.getSettings();
+    const current = settings.dismissedAlertProductIds || [];
+    settings.dismissedAlertProductIds = current.filter(id => id !== productId);
+    this.saveSettings(settings);
+  }
+
+  static dismissAllStockAlerts(): void {
+    const settings = this.getSettings();
+    const allAlerts = this.getStockAlerts(true);
+    settings.dismissedAlertProductIds = allAlerts.map(a => a.product.id);
+    this.saveSettings(settings);
+  }
+
+  static restoreAllStockAlerts(): void {
+    const settings = this.getSettings();
+    settings.dismissedAlertProductIds = [];
+    settings.enableStockAlerts = true;
+    this.saveSettings(settings);
+  }
+
+  static setStockAlertsEnabled(enabled: boolean): void {
+    const settings = this.getSettings();
+    settings.enableStockAlerts = enabled;
+    this.saveSettings(settings);
   }
 
   // SUPPLIERS
@@ -383,12 +547,41 @@ export class StorageService {
     if (customer) {
       customer.totalOrdersCount += 1;
       customer.totalSpent += newOrder.totalAmount;
-      customer.currentBalance += remainingBalance;
       this.saveCustomers(customers);
     }
 
     orders.unshift(newOrder);
     this.saveCustomerOrders(orders);
+
+    // Register Account Movement for the Order (Debit)
+    this.addAccountMovement({
+      entityType: 'customer',
+      entityId: newOrder.customerId,
+      entityName: newOrder.customerName,
+      date: newOrder.createdAt,
+      type: 'cargo_pedido',
+      concept: `Pedido ${newOrder.orderNumber}: ${newOrder.items.map(i => `${i.quantity}x ${i.productName}`).join(', ')}`,
+      referenceNumber: newOrder.orderNumber,
+      debit: newOrder.totalAmount,
+      credit: 0
+    });
+
+    // If there is an initial deposit/seña, register Credit movement
+    if (newOrder.depositAmount > 0) {
+      this.addAccountMovement({
+        entityType: 'customer',
+        entityId: newOrder.customerId,
+        entityName: newOrder.customerName,
+        date: newOrder.createdAt,
+        type: 'pago_seña',
+        concept: `Seña / Anticipo para Pedido ${newOrder.orderNumber}`,
+        referenceNumber: `REC-${Date.now().toString().slice(-4)}`,
+        debit: 0,
+        credit: newOrder.depositAmount,
+        paymentMethod: 'efectivo'
+      });
+    }
+
     return newOrder;
   }
 
@@ -401,12 +594,18 @@ export class StorageService {
         order.deliveredAt = new Date().toISOString();
         // If remaining balance is paid upon delivery, update customer balance
         if (order.remainingBalance > 0 && order.paymentStatus === 'pagado') {
-          const customers = this.getCustomers();
-          const customer = customers.find(c => c.id === order.customerId);
-          if (customer) {
-            customer.currentBalance = Math.max(0, customer.currentBalance - order.remainingBalance);
-            this.saveCustomers(customers);
-          }
+          this.addAccountMovement({
+            entityType: 'customer',
+            entityId: order.customerId,
+            entityName: order.customerName,
+            date: new Date().toISOString(),
+            type: 'pago_recibido',
+            concept: `Saldo final cancelado contra entrega Pedido ${order.orderNumber}`,
+            referenceNumber: `REC-${Date.now().toString().slice(-4)}`,
+            debit: 0,
+            credit: order.remainingBalance,
+            paymentMethod: 'efectivo'
+          });
           order.remainingBalance = 0;
         }
       }
@@ -414,7 +613,7 @@ export class StorageService {
     }
   }
 
-  static updateOrderPayment(orderId: string, paymentStatus: CustomerOrder['paymentStatus'], additionalPayment: number): void {
+  static updateOrderPayment(orderId: string, paymentStatus: CustomerOrder['paymentStatus'], additionalPayment: number, paymentMethod: PaymentMethodType = 'transferencia', referenceNote?: string): void {
     const orders = this.getCustomerOrders();
     const order = orders.find(o => o.id === orderId);
     if (order) {
@@ -422,14 +621,23 @@ export class StorageService {
       order.depositAmount += additionalPayment;
       order.remainingBalance = Math.max(0, order.totalAmount - order.depositAmount);
 
-      const customers = this.getCustomers();
-      const customer = customers.find(c => c.id === order.customerId);
-      if (customer) {
-        customer.currentBalance = Math.max(0, customer.currentBalance - additionalPayment);
-        this.saveCustomers(customers);
-      }
-
       this.saveCustomerOrders(orders);
+
+      if (additionalPayment > 0) {
+        this.addAccountMovement({
+          entityType: 'customer',
+          entityId: order.customerId,
+          entityName: order.customerName,
+          date: new Date().toISOString(),
+          type: 'pago_recibido',
+          concept: `Cobro / Pago recibido para Pedido ${order.orderNumber}`,
+          referenceNumber: `REC-${Date.now().toString().slice(-4)}`,
+          debit: 0,
+          credit: additionalPayment,
+          paymentMethod,
+          notes: referenceNote
+        });
+      }
     }
   }
 
@@ -494,7 +702,15 @@ export class StorageService {
     const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     if (!raw) return DEFAULT_SETTINGS;
     try {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+      const parsed = JSON.parse(raw);
+      return {
+        ...DEFAULT_SETTINGS,
+        ...parsed,
+        labelSettings: {
+          ...DEFAULT_LABEL_SETTINGS,
+          ...(parsed.labelSettings || {})
+        }
+      };
     } catch {
       return DEFAULT_SETTINGS;
     }
@@ -625,6 +841,107 @@ export class StorageService {
     this.saveQuotations(quotes);
   }
 
+  // ACCOUNT MOVEMENTS / CUENTAS CORRIENTES
+  static getAccountMovements(filter?: { entityType?: 'customer' | 'supplier'; entityId?: string }): AccountMovement[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.ACCOUNT_MOVEMENTS);
+    let list: AccountMovement[] = [];
+    if (!raw) {
+      this.saveAccountMovements(INITIAL_ACCOUNT_MOVEMENTS);
+      list = INITIAL_ACCOUNT_MOVEMENTS;
+    } else {
+      try {
+        list = JSON.parse(raw);
+        if (list.length < INITIAL_ACCOUNT_MOVEMENTS.length) {
+          const existingIds = new Set(list.map(m => m.id));
+          const missing = INITIAL_ACCOUNT_MOVEMENTS.filter(m => !existingIds.has(m.id));
+          if (missing.length > 0) {
+            list = [...list, ...missing];
+            this.saveAccountMovements(list);
+          }
+        }
+      } catch {
+        list = INITIAL_ACCOUNT_MOVEMENTS;
+      }
+    }
+
+    if (filter) {
+      if (filter.entityType) {
+        list = list.filter(m => m.entityType === filter.entityType);
+      }
+      if (filter.entityId) {
+        list = list.filter(m => m.entityId === filter.entityId);
+      }
+    }
+
+    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
+  static saveAccountMovements(movements: AccountMovement[]): void {
+    localStorage.setItem(STORAGE_KEYS.ACCOUNT_MOVEMENTS, JSON.stringify(movements));
+    window.dispatchEvent(new Event('sublistock_movements_updated'));
+  }
+
+  static addAccountMovement(movement: Omit<AccountMovement, 'id' | 'balanceAfter'>): AccountMovement {
+    const movements = this.getAccountMovements();
+    const entityMovements = movements.filter(m => m.entityId === movement.entityId);
+
+    let previousBalance = 0;
+    if (movement.entityType === 'customer') {
+      const customer = this.getCustomers().find(c => c.id === movement.entityId);
+      previousBalance = customer ? customer.currentBalance : 0;
+    } else {
+      const sortedAsc = [...entityMovements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      previousBalance = sortedAsc.length > 0 ? sortedAsc[sortedAsc.length - 1].balanceAfter : 0;
+    }
+
+    let newBalance = previousBalance;
+    if (movement.entityType === 'customer') {
+      newBalance = previousBalance + (movement.debit || 0) - (movement.credit || 0);
+    } else {
+      newBalance = previousBalance + (movement.credit || 0) - (movement.debit || 0);
+    }
+
+    const newMov: AccountMovement = {
+      ...movement,
+      id: 'mov-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      balanceAfter: Math.max(0, newBalance)
+    };
+
+    movements.unshift(newMov);
+    this.saveAccountMovements(movements);
+
+    // Sync Customer balance
+    if (movement.entityType === 'customer') {
+      const customers = this.getCustomers();
+      const customer = customers.find(c => c.id === movement.entityId);
+      if (customer) {
+        customer.currentBalance = Math.max(0, newBalance);
+        this.saveCustomers(customers);
+      }
+    }
+
+    return newMov;
+  }
+
+  static deleteAccountMovement(id: string): void {
+    const movements = this.getAccountMovements();
+    const movement = movements.find(m => m.id === id);
+    if (!movement) return;
+
+    const filtered = movements.filter(m => m.id !== id);
+    this.saveAccountMovements(filtered);
+
+    if (movement.entityType === 'customer') {
+      const customers = this.getCustomers();
+      const customer = customers.find(c => c.id === movement.entityId);
+      if (customer) {
+        const diff = (movement.credit || 0) - (movement.debit || 0);
+        customer.currentBalance = Math.max(0, customer.currentBalance + diff);
+        this.saveCustomers(customers);
+      }
+    }
+  }
+
   // BACKUP & RESET
   static exportFullBackupJSON(): string {
     const backup = {
@@ -637,6 +954,7 @@ export class StorageService {
       dailySales: this.getDailySales(),
       users: this.getUsers(),
       quotations: this.getQuotations(),
+      accountMovements: this.getAccountMovements(),
       settings: this.getSettings()
     };
     return JSON.stringify(backup, null, 2);
@@ -653,6 +971,7 @@ export class StorageService {
       if (parsed.dailySales) this.saveDailySales(parsed.dailySales);
       if (parsed.users) this.saveUsers(parsed.users);
       if (parsed.quotations) this.saveQuotations(parsed.quotations);
+      if (parsed.accountMovements) this.saveAccountMovements(parsed.accountMovements);
       if (parsed.settings) this.saveSettings(parsed.settings);
       return true;
     } catch (err) {
@@ -670,6 +989,7 @@ export class StorageService {
     this.saveDailySales(INITIAL_DAILY_SALES);
     this.saveUsers(INITIAL_USERS);
     this.saveQuotations(INITIAL_QUOTATIONS);
+    this.saveAccountMovements(INITIAL_ACCOUNT_MOVEMENTS);
     this.saveSettings(DEFAULT_SETTINGS);
   }
 }

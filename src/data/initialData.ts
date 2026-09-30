@@ -1,4 +1,4 @@
-import { ProductItem, Supplier, Customer, CustomerOrder, PurchaseOrder, DailySale, AppUser, Quotation } from '../types';
+import { ProductItem, Supplier, Customer, CustomerOrder, PurchaseOrder, DailySale, AppUser, Quotation, AccountMovement } from '../types';
 
 export const INITIAL_PRODUCTS: ProductItem[] = [
   // 1. Tazas y Mugs
@@ -1349,4 +1349,217 @@ export const INITIAL_QUOTATIONS: Quotation[] = [
     paymentTerms: '50% de anticipo para compra de gorras, saldo al momento de retirar.'
   }
 ];
+
+export const INITIAL_ACCOUNT_MOVEMENTS: AccountMovement[] = [
+  // Movimientos Cliente 1: Colegio San Martín (Saldo actual: $85.000)
+  {
+    id: 'mov-101',
+    entityType: 'customer',
+    entityId: 'cust-01',
+    entityName: 'Colegio San Martín - Promo 2026',
+    date: '2026-09-01T10:30:00Z',
+    type: 'saldo_inicial',
+    concept: 'Apertura de cuenta corriente ciclo lectivo 2026',
+    referenceNumber: 'APER-001',
+    debit: 0,
+    credit: 0,
+    balanceAfter: 0,
+    notes: 'Apertura con saldo en $0'
+  },
+  {
+    id: 'mov-102',
+    entityType: 'customer',
+    entityId: 'cust-01',
+    entityName: 'Colegio San Martín - Promo 2026',
+    date: '2026-09-10T14:15:00Z',
+    type: 'cargo_pedido',
+    concept: 'Pedido PED-2026-101: 35 Remeras Egresados Spum + 35 Tazas Cerámica',
+    referenceNumber: 'PED-2026-101',
+    debit: 346500,
+    credit: 0,
+    balanceAfter: 346500,
+    notes: 'Presupuesto aprobado por directivos'
+  },
+  {
+    id: 'mov-103',
+    entityType: 'customer',
+    entityId: 'cust-01',
+    entityName: 'Colegio San Martín - Promo 2026',
+    date: '2026-09-12T16:00:00Z',
+    type: 'pago_seña',
+    concept: 'Cobro de Seña 50% por Transferencia Bancaria',
+    referenceNumber: 'REC-2026-0041',
+    debit: 0,
+    credit: 173250,
+    balanceAfter: 173250,
+    paymentMethod: 'transferencia',
+    notes: 'Comprobante Banco Galicia #449102'
+  },
+  {
+    id: 'mov-104',
+    entityType: 'customer',
+    entityId: 'cust-01',
+    entityName: 'Colegio San Martín - Promo 2026',
+    date: '2026-09-20T11:45:00Z',
+    type: 'pago_recibido',
+    concept: 'Pago parcial adicional en efectivo',
+    referenceNumber: 'REC-2026-0078',
+    debit: 0,
+    credit: 88250,
+    balanceAfter: 85000,
+    paymentMethod: 'efectivo',
+    notes: 'Entrega en el taller por Prof. Fernández'
+  },
+
+  // Movimientos Cliente 2: Cafetería & Tostaduría Moka (Saldo actual: $0)
+  {
+    id: 'mov-201',
+    entityType: 'customer',
+    entityId: 'cust-02',
+    entityName: 'Cafetería & Tostaduría Moka',
+    date: '2026-08-15T09:00:00Z',
+    type: 'cargo_pedido',
+    concept: 'Pedido PED-2026-088: 72 Tazas Orca con Logo en 2 caras',
+    referenceNumber: 'PED-2026-088',
+    debit: 180000,
+    credit: 0,
+    balanceAfter: 180000
+  },
+  {
+    id: 'mov-202',
+    entityType: 'customer',
+    entityId: 'cust-02',
+    entityName: 'Cafetería & Tostaduría Moka',
+    date: '2026-08-20T17:30:00Z',
+    type: 'pago_recibido',
+    concept: 'Cancelación total contra entrega por MercadoPago QR',
+    referenceNumber: 'REC-2026-0055',
+    debit: 0,
+    credit: 180000,
+    balanceAfter: 0,
+    paymentMethod: 'mercadopago',
+    notes: 'Cuenta al día. Cliente excelente pagador.'
+  },
+
+  // Movimientos Cliente 3: Club Atlético Defensores (Saldo actual: $45.000)
+  {
+    id: 'mov-301',
+    entityType: 'customer',
+    entityId: 'cust-03',
+    entityName: 'Club Atlético Defensores',
+    date: '2026-09-18T10:00:00Z',
+    type: 'cargo_pedido',
+    concept: 'Pedido PED-2026-103: 50 Gorras Trucker Aniversario',
+    referenceNumber: 'PED-2026-103',
+    debit: 145000,
+    credit: 0,
+    balanceAfter: 145000
+  },
+  {
+    id: 'mov-302',
+    entityType: 'customer',
+    entityId: 'cust-03',
+    entityName: 'Club Atlético Defensores',
+    date: '2026-09-19T12:00:00Z',
+    type: 'pago_seña',
+    concept: 'Anticipo inicial por Transferencia Bancaria',
+    referenceNumber: 'REC-2026-0062',
+    debit: 0,
+    credit: 100000,
+    balanceAfter: 45000,
+    paymentMethod: 'transferencia',
+    notes: 'Resta saldo de $45.000 a abonar al retirar'
+  },
+
+  // Movimientos Cliente 5: Jardín de Infantes Rayito de Sol (Saldo actual: $28.000)
+  {
+    id: 'mov-501',
+    entityType: 'customer',
+    entityId: 'cust-05',
+    entityName: 'Jardín de Infantes Rayito de Sol',
+    date: '2026-09-22T08:30:00Z',
+    type: 'cargo_pedido',
+    concept: 'Pedido PED-2026-105: 25 Tazas Polímero + 25 Platos',
+    referenceNumber: 'PED-2026-105',
+    debit: 98000,
+    credit: 0,
+    balanceAfter: 98000
+  },
+  {
+    id: 'mov-502',
+    entityType: 'customer',
+    entityId: 'cust-05',
+    entityName: 'Jardín de Infantes Rayito de Sol',
+    date: '2026-09-23T15:20:00Z',
+    type: 'pago_seña',
+    concept: 'Seña en efectivo recibida en administración',
+    referenceNumber: 'REC-2026-0081',
+    debit: 0,
+    credit: 70000,
+    balanceAfter: 28000,
+    paymentMethod: 'efectivo',
+    notes: 'Saldo pendiente contra entrega'
+  },
+
+  // Movimientos Proveedores
+  {
+    id: 'mov-sup-101',
+    entityType: 'supplier',
+    entityId: 'sup-01',
+    entityName: 'Cerámicas del Plata & Polímeros S.A.',
+    date: '2026-09-15T09:00:00Z',
+    type: 'compra_proveedor',
+    concept: 'Compra de 72 Tazas Cerámica AAA (Factura A-0004-001290)',
+    referenceNumber: 'COM-2026-001',
+    debit: 0,
+    credit: 90000, // Deuda generada con proveedor
+    balanceAfter: 90000,
+    notes: 'Plazo 30 días fecha de factura'
+  },
+  {
+    id: 'mov-sup-102',
+    entityType: 'supplier',
+    entityId: 'sup-01',
+    entityName: 'Cerámicas del Plata & Polímeros S.A.',
+    date: '2026-09-22T11:00:00Z',
+    type: 'pago_proveedor',
+    concept: 'Pago parcial por transferencia bancaria interbanking',
+    referenceNumber: 'OP-2026-044',
+    debit: 45000, // Pago emitido
+    credit: 0,
+    balanceAfter: 45000,
+    paymentMethod: 'transferencia',
+    notes: 'Comprobante Santander #99104'
+  },
+  {
+    id: 'mov-sup-201',
+    entityType: 'supplier',
+    entityId: 'sup-02',
+    entityName: 'Textil Sublimable del Sur',
+    date: '2026-09-18T14:00:00Z',
+    type: 'compra_proveedor',
+    concept: 'Compra de 50 Remeras Spum blancas surtidas',
+    referenceNumber: 'COM-2026-002',
+    debit: 0,
+    credit: 125000,
+    balanceAfter: 125000,
+    notes: 'Descuento 10% por bulto cerrado'
+  },
+  {
+    id: 'mov-sup-202',
+    entityType: 'supplier',
+    entityId: 'sup-02',
+    entityName: 'Textil Sublimable del Sur',
+    date: '2026-09-20T16:30:00Z',
+    type: 'pago_proveedor',
+    concept: 'Cancelación total en efectivo al retirar de fábrica',
+    referenceNumber: 'OP-2026-048',
+    debit: 125000,
+    credit: 0,
+    balanceAfter: 0,
+    paymentMethod: 'efectivo',
+    notes: 'Cuenta saldada'
+  }
+];
+
 

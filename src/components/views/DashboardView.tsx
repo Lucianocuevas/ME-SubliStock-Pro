@@ -19,7 +19,9 @@ import {
   ArrowDownRight,
   Sparkles,
   Filter,
-  Activity
+  Activity,
+  BellOff,
+  CreditCard
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -32,7 +34,7 @@ import {
   Legend
 } from 'recharts';
 import { ProductItem, CustomerOrder, DailySale, PurchaseOrder, StockAlert } from '../../types';
-import { formatCurrency, calculateOrderUrgency } from '../../services/storageService';
+import { StorageService, formatCurrency, calculateOrderUrgency } from '../../services/storageService';
 import { CATEGORY_LABELS } from '../../data/initialData';
 
 interface Props {
@@ -46,6 +48,7 @@ interface Props {
   onOpenNewQuotation?: () => void;
   onNavigateTab: (tab: string) => void;
   onSelectOrder: (order: CustomerOrder) => void;
+  onDismissAllAlerts?: () => void;
 }
 
 export const DashboardView: React.FC<Props> = ({
@@ -58,7 +61,8 @@ export const DashboardView: React.FC<Props> = ({
   onOpenNewOrder,
   onOpenNewQuotation,
   onNavigateTab,
-  onSelectOrder
+  onSelectOrder,
+  onDismissAllAlerts
 }) => {
   const [liveClock, setLiveClock] = React.useState(new Date());
   const [chartTimeframe, setChartTimeframe] = useState<'year' | 'last30days' | 'last12weeks'>('year');
@@ -360,6 +364,15 @@ export const DashboardView: React.FC<Props> = ({
           </button>
 
           <button
+            onClick={() => onNavigateTab('cuentas_corrientes')}
+            className="px-3.5 py-2 bg-emerald-600/90 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+            title="Ver Cuentas Corrientes y Saldos"
+          >
+            <CreditCard className="w-3.5 h-3.5" />
+            <span>Cuentas Corrientes</span>
+          </button>
+
+          <button
             onClick={() => onNavigateTab('backend')}
             className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
             title="Exportar MySQL y estructura Spring Boot"
@@ -389,13 +402,28 @@ export const DashboardView: React.FC<Props> = ({
               </p>
             </div>
           </div>
-          <button
-            onClick={() => onNavigateTab('alerts')}
-            className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors shrink-0 shadow-md shadow-rose-950/60"
-          >
-            <span>Ver Insumos y Reponer</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <button
+              onClick={() => {
+                if (confirm('¿Sacar y silenciar estas alertas para que no se muestren en el panel?')) {
+                  StorageService.dismissAllStockAlerts();
+                  onDismissAllAlerts?.();
+                }
+              }}
+              className="px-3 py-2 bg-slate-900/90 hover:bg-slate-800 text-amber-300 hover:text-amber-200 border border-amber-800/80 hover:border-amber-600 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+              title="Sacar alertas del panel de inicio"
+            >
+              <BellOff className="w-4 h-4 text-amber-400" />
+              <span>Sacar Alertas</span>
+            </button>
+            <button
+              onClick={() => onNavigateTab('alerts')}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-md shadow-rose-950/60"
+            >
+              <span>Ver Insumos y Reponer</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 

@@ -1,0 +1,172 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Insumo o producto base de sublimación y estampado",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sku": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "currentStock": { "type": "number" },
+        "minStock": { "type": "number" },
+        "costPrice": { "type": "number" },
+        "salePrice": { "type": "number" }
+      },
+      "required": ["id", "name"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Cliente del taller con cuenta corriente y contacto",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "currentBalance": { "type": "number" }
+      },
+      "required": ["id", "name"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Proveedor de insumos gráficos y textiles",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "contactPerson": { "type": "string" },
+        "phone": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Pedido de producción de cliente con fecha de entrega",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderNumber": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "depositAmount": { "type": "number" },
+        "productionStatus": { "type": "string" }
+      },
+      "required": ["id", "orderNumber"]
+    },
+    "Purchase": {
+      "title": "Purchase",
+      "description": "Orden de compra de insumos a proveedor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderNumber": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "totalAmount": { "type": "number" }
+      },
+      "required": ["id", "orderNumber"]
+    },
+    "DailySale": {
+      "title": "DailySale",
+      "description": "Venta de mostrador directa",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "saleNumber": { "type": "string" },
+        "totalAmount": { "type": "number" }
+      },
+      "required": ["id", "saleNumber"]
+    },
+    "Quotation": {
+      "title": "Quotation",
+      "description": "Presupuesto formal con desglose de costos",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "quoteNumber": { "type": "string" },
+        "customerName": { "type": "string" },
+        "totalAmount": { "type": "number" }
+      },
+      "required": ["id", "quoteNumber"]
+    },
+    "AccountMovement": {
+      "title": "AccountMovement",
+      "description": "Asiento de debe/haber en cuenta corriente",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "entityType": { "type": "string" },
+        "entityId": { "type": "string" },
+        "entityName": { "type": "string" },
+        "type": { "type": "string" },
+        "debit": { "type": "number" },
+        "credit": { "type": "number" },
+        "balanceAfter": { "type": "number" }
+      },
+      "required": ["id", "entityId"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Configuración del taller, datos fiscales y bancarios",
+      "type": "object",
+      "properties": {
+        "workshopName": { "type": "string" },
+        "taxId": { "type": "string" },
+        "bankDetails": { "type": "string" }
+      }
+    },
+    "Metadata": {
+      "title": "Metadata",
+      "description": "Estado de sincronización y control",
+      "type": "object",
+      "properties": {
+        "lastSyncAt": { "type": "string" },
+        "appVersion": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Catálogo de insumos y productos base"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Clientes del taller y cartera"
+    },
+    "/suppliers/{supplierId}": {
+      "schema": "Supplier",
+      "description": "Proveedores y fabricantes"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Pedidos de producción y entregas"
+    },
+    "/purchases/{purchaseId}": {
+      "schema": "Purchase",
+      "description": "Compras de insumos"
+    },
+    "/daily_sales/{saleId}": {
+      "schema": "DailySale",
+      "description": "Ventas directas"
+    },
+    "/quotations/{quoteId}": {
+      "schema": "Quotation",
+      "description": "Presupuestos formalizados"
+    },
+    "/account_movements/{movementId}": {
+      "schema": "AccountMovement",
+      "description": "Libro de cuenta corriente"
+    },
+    "/settings/{settingId}": {
+      "schema": "Settings",
+      "description": "Datos de configuración institucional"
+    },
+    "/metadata/{docId}": {
+      "schema": "Metadata",
+      "description": "Metadatos de sincronización entre dispositivos"
+    }
+  }
+}

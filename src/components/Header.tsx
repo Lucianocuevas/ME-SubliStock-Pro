@@ -9,13 +9,17 @@ import {
   FileText,
   Package,
   Calendar,
-  Shield
+  Shield,
+  Settings as SettingsIcon,
+  BellOff,
+  Smartphone
 } from 'lucide-react';
 import { AppUser } from '../types';
 import { ROLE_LABELS } from '../data/initialData';
 
 interface Props {
   workshopName: string;
+  logoUrl?: string;
   criticalStockCount: number;
   urgentOrdersCount: number;
   currentUser?: AppUser;
@@ -29,6 +33,7 @@ interface Props {
 
 export const Header: React.FC<Props> = ({
   workshopName,
+  logoUrl,
   criticalStockCount,
   urgentOrdersCount,
   currentUser,
@@ -69,12 +74,22 @@ export const Header: React.FC<Props> = ({
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
         {/* Brand */}
         <div className="flex items-center gap-2.5 shrink-0">
-          <div
-            onClick={() => onNavigateTab('dashboard')}
-            className="cursor-pointer w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white shadow-md shadow-orange-950/50"
-          >
-            <Flame className="w-5 h-5 fill-white/20" />
-          </div>
+          {logoUrl ? (
+            <div
+              onClick={() => onNavigateTab('settings')}
+              className="cursor-pointer h-9 w-9 rounded-lg bg-white p-0.5 border border-slate-700 hover:border-cyan-500 flex items-center justify-center overflow-hidden shrink-0 shadow-md transition-colors"
+              title="Configuración de Empresa, Logo y Datos"
+            >
+              <img src={logoUrl} alt={workshopName} className="h-full w-full object-contain" />
+            </div>
+          ) : (
+            <div
+              onClick={() => onNavigateTab('dashboard')}
+              className="cursor-pointer w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white shadow-md shadow-orange-950/50"
+            >
+              <Flame className="w-5 h-5 fill-white/20" />
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-1.5">
               <span
@@ -87,7 +102,13 @@ export const Header: React.FC<Props> = ({
                 PRO
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-medium truncate max-w-[130px] sm:max-w-xs">{workshopName}</p>
+            <p
+              onClick={() => onNavigateTab('settings')}
+              className="text-[11px] text-slate-400 font-medium truncate max-w-[130px] sm:max-w-xs cursor-pointer hover:text-cyan-400 transition-colors"
+              title="Clic para configurar datos de la empresa"
+            >
+              {workshopName}
+            </p>
           </div>
         </div>
 
@@ -183,6 +204,25 @@ export const Header: React.FC<Props> = ({
               </div>
             </button>
           )}
+
+          {/* Quick Settings Icon */}
+          <button
+            onClick={() => onNavigateTab('settings')}
+            className="p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-900 rounded-lg transition-colors border border-slate-800/60"
+            title="Configuración de la Empresa, Logo, Datos y Alertas"
+          >
+            <SettingsIcon className="w-4 h-4" />
+          </button>
+
+          {/* Quick Multi-Device & Mobile Access */}
+          <button
+            onClick={() => onNavigateTab('multi_device')}
+            className="p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-900 rounded-lg transition-colors border border-slate-800/60 flex items-center gap-1"
+            title="Acceso Multi-Dispositivo (PC, Android & iOS con la misma base de datos)"
+          >
+            <Smartphone className="w-4 h-4 text-cyan-400" />
+            <span className="hidden lg:inline text-[10px] font-bold text-cyan-400">Móvil/Nube</span>
+          </button>
         </div>
       </div>
     </header>
