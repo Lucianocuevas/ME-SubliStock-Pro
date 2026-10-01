@@ -20,30 +20,37 @@ import {
   PurchaseOrder,
   MonthlyReportSummary,
   ProductCategory,
-  MaterialType
+  MaterialType,
+  AccountMovement
 } from '../../types';
-import { formatCurrency } from '../../services/storageService';
+import { formatCurrency, AppSettings, StorageService } from '../../services/storageService';
 import { ExportService } from '../../services/exportService';
 import { CATEGORY_LABELS, MATERIAL_LABELS } from '../../data/initialData';
+import { MonthlyReportPdfModal } from '../modals/MonthlyReportPdfModal';
 
 interface Props {
   products: ProductItem[];
   orders: CustomerOrder[];
   dailySales: DailySale[];
   purchases: PurchaseOrder[];
+  accountMovements?: AccountMovement[];
+  settings?: AppSettings;
 }
 
 export const ReportsView: React.FC<Props> = ({
   products,
   orders,
   dailySales,
-  purchases
+  purchases,
+  accountMovements,
+  settings
 }) => {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
 
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number>(currentMonth);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
 
   const monthsList = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -71,6 +78,14 @@ export const ReportsView: React.FC<Props> = ({
       return y === selectedYear && (m - 1) === selectedMonth;
     });
   }, [purchases, selectedYear, selectedMonth]);
+
+  const monthMovements = useMemo(() => {
+    const list = accountMovements && accountMovements.length > 0 ? accountMovements : StorageService.getAccountMovements();
+    return list.filter(m => {
+      const d = new Date(m.date);
+      return d.getFullYear() === selectedYear && d.getMonth() === selectedMonth;
+    });
+  }, [accountMovements, selectedYear, selectedMonth]);
 
   // Calculations
   const salesRevenue = monthSales.reduce((acc, s) => acc + s.totalAmount, 0);
@@ -219,12 +234,12 @@ export const ReportsView: React.FC<Props> = ({
           </button>
 
           <button
-            onClick={handleExportPDF}
+            onClick={() => setIsPdfModalOpen(true)}
             className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-rose-950/50 transition-colors"
-            title="Generar y descargar documento PDF formal"
+            title="Generar y descargar documento PDF formal de ventas y movimientos"
           >
             <FileText className="w-4 h-4" />
-            <span>Descargar PDF</span>
+            <span>Descargar Reporte PDF (Ventas & Movimientos)</span>
           </button>
 
           <button
@@ -377,6 +392,92 @@ export const ReportsView: React.FC<Props> = ({
         </div>
       </div>
 
+      {/* Monthly Financial Movements Table */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-3">
+          <div className="flex items-center gap-2">
+            <Layers className="w-5 h-5 text-emerald-400" />
+            <div>
+              <h3 className="font-bold text-white text-sm">
+                Movimientos Financieros y Cobranzas del Mes ({monthMovements.length} registros)
+              </h3>
+              <p className="text-xs text-slate-400">
+                Cobranzas de pedidos, señas, pagos a proveedores y flujo de caja en {monthsList[selectedMonth]} {selectedYear}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsPdfModalOpen(true)}
+              className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Exportar PDF Completo</span>
+            </button>
+          </div>
+        </div>
+
+        {monthMovements.length === 0 ? (
+          <div className="p-8 text-center text-slate-500 text-xs bg-slate-950 rounded-xl border border-slate-800/80">
+            No hay movimientos financieros registrados en {monthsList[selectedMonth]} {selectedYear}.
+          </div>
+        ) : (
+          <div className="border border-slate-800 rounded-xl overflow-hidden overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-950 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-800">
+                <tr>
+                  <th className="py-2.5 px-3">Fecha</th>
+                  <th className="py-2.5 px-3">Comprobante / Ref</th>
+                  <th className="py-2.5 px-3">Entidad / Cliente</th>
+                  <th className="py-2.5 px-3">Tipo de Movimiento</th>
+                  <th className="py-2.5 px-3">Concepto</th>
+                  <th className="py-2.5 px-3">Medio de Pago</th>
+                  <th className="py-2.5 px-3 text-right">Haber (Ingreso +)</th>
+                  <th className="py-2.5 px-3 text-right">Debe (Egreso -)</th>
+                  <th className="py-2.5 px-3 text-right">Saldo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 bg-slate-900/60">
+                {monthMovements.map(m => (
+                  <tr key={m.id} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="py-2.5 px-3 font-mono text-slate-400">
+                      {new Date(m.date).toLocaleDateString('es-AR')}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono text-white font-medium">
+                      {m.referenceNumber || '-'}
+                    </td>
+                    <td className="py-2.5 px-3 font-semibold text-white">
+                      {m.entityName}
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">
+                        {m.type.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-300 max-w-xs truncate">
+                      {m.concept}
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-400 capitalize">
+                      {m.paymentMethod || '-'}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-bold text-emerald-400 font-mono">
+                      {m.credit > 0 ? formatCurrency(m.credit) : '-'}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-bold text-rose-400 font-mono">
+                      {m.debit > 0 ? formatCurrency(m.debit) : '-'}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-bold text-white font-mono">
+                      {formatCurrency(m.balanceAfter)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Formal Printable Document Preview (formatted for clean window.print()) */}
       <div className="p-6 bg-slate-950 border border-slate-800 rounded-xl space-y-4 print-only">
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
@@ -405,6 +506,21 @@ export const ReportsView: React.FC<Props> = ({
           </div>
         </div>
       </div>
+
+      {/* MODAL PARA GENERAR Y DESCARGAR REPORTE MENSUAL PDF */}
+      <MonthlyReportPdfModal
+        isOpen={isPdfModalOpen}
+        onClose={() => setIsPdfModalOpen(false)}
+        summary={reportSummary}
+        monthSales={monthSales}
+        monthOrders={monthOrders}
+        monthPurchases={monthPurchases}
+        monthMovements={monthMovements}
+        criticalProducts={criticalProducts}
+        settings={settings || StorageService.getSettings()}
+        selectedMonthName={monthsList[selectedMonth]}
+        selectedYear={selectedYear}
+      />
     </div>
   );
 };

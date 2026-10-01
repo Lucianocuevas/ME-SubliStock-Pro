@@ -350,6 +350,450 @@ export class ExportService {
   }
 
   /**
+   * Export comprehensive Monthly Sales & Financial Movements PDF
+   */
+  static exportMonthlySalesAndMovementsPDF(
+    summary: MonthlyReportSummary,
+    monthSales: DailySale[],
+    monthOrders: CustomerOrder[],
+    monthPurchases: PurchaseOrder[],
+    monthMovements: AccountMovement[],
+    criticalProducts: ProductItem[],
+    settings?: AppSettings,
+    options?: {
+      includeExecutiveSummary?: boolean;
+      includeSales?: boolean;
+      includeOrders?: boolean;
+      includeMovements?: boolean;
+      includePurchases?: boolean;
+      includeAlerts?: boolean;
+      saveToFile?: boolean;
+    }
+  ): jsPDF {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const workshopName = settings?.workshopName || 'SubliStudio Taller Gráfico & Sublimación';
+
+    const incSummary = options?.includeExecutiveSummary ?? true;
+    const incSales = options?.includeSales ?? true;
+    const incOrders = options?.includeOrders ?? true;
+    const incMovements = options?.includeMovements ?? true;
+    const incPurchases = options?.includePurchases ?? true;
+    const incAlerts = options?.includeAlerts ?? true;
+    const saveToFile = options?.saveToFile ?? true;
+
+    // 1. Header Banner
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(0, 0, 210, 36, 'F');
+
+    // Logo if exists
+    let logoOffset = 14;
+    if (settings?.logoUrl) {
+      try {
+        doc.addImage(settings.logoUrl, 'PNG', 14, 6, 18, 18);
+        logoOffset = 36;
+      } catch {
+        logoOffset = 14;
+      }
+    }
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(15);
+    doc.setFont('helvetica', 'bold');
+    doc.text(workshopName, logoOffset, 14);
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(203, 213, 225); // slate-300
+    const subtitle = [
+      settings?.slogan || 'Sublimación, Estampado Textil & Merchandising',
+      `CUIT: ${settings?.taxId || '30-71987654-2'}`,
+      settings?.phone ? `Tel: ${settings.phone}` : null,
+      settings?.email ? `Email: ${settings.email}` : null
+    ].filter(Boolean).join(' • ');
+    doc.text(subtitle, logoOffset, 21);
+
+    // Right-aligned report title & period
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(251, 146, 60); // orange-400
+    doc.text('INFORME DE VENTAS & MOVIMIENTOS', 196, 14, { align: 'right' });
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text(`PERÍODO: ${summary.monthName.toUpperCase()} ${summary.year}`, 196, 21, { align: 'right' });
+
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(148, 163, 184);
+    doc.text(
+      `Emitido: ${new Date().toLocaleDateString('es-AR')} ${new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`,
+      196,
+      27,
+      { align: 'right' }
+    );
+
+    let currentY = 44;
+
+    // 2. Executive Financial & Production Summary
+    if (incSummary) {
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('1. RESUMEN EJECUTIVO Y MÉTRICAS FINANCIERAS', 14, currentY);
+
+      // Movements aggregation for the month
+      const totalCollections = monthMovements
+        .filter(m => m.credit > 0)
+        .reduce((sum, m) => sum + m.credit, 0);
+      const totalOutflows = monthMovements
+        .filter(m => m.debit > 0 && m.type !== 'cargo_pedido')
+        .reduce((sum, m) => sum + m.debit, 0);
+
+      const kpiRows = [
+        [
+          'Ventas Totales Facturadas:',
+          formatCurrency(summary.totalSalesRevenue),
+          'Costo Total de Insumos:',
+          formatCurrency(summary.totalProductionCost)
+        ],
+        [
+          'Ganancia Bruta Estimada:',
+          formatCurrency(summary.estimatedGrossProfit),
+          'Margen Bruto:',
+          `${summary.grossMarginPercent.toFixed(1)}%`
+        ],
+        [
+          'Cobranzas / Ingresos Percibidos:',
+          formatCurrency(totalCollections),
+          'Compras a Proveedores:',
+          formatCurrency(summary.totalSupplierPurchases)
+        ],
+        [
+          'Pedidos Completados:',
+          `${summary.ordersCompletedCount} pedidos`,
+          'Unidades Producidas:',
+          `${summary.totalUnitsProduced} unidades`
+        ],
+        [
+          'Valorización del Stock Actual:',
+          formatCurrency(summary.currentInventoryValue),
+          'Insumos Críticos / Alerta:',
+          `${criticalProducts.length} productos`
+        ]
+      ];
+
+      autoTable(doc, {
+        startY: currentY + 3,
+        head: [],
+        body: kpiRows,
+        theme: 'plain',
+        styles: { fontSize: 8.5, cellPadding: 2.5 },
+        columnStyles: {
+          0: { fontStyle: 'bold', textColor: [71, 85, 105], cellWidth: 48 },
+          1: { textColor: [15, 23, 42], fontStyle: 'bold', cellWidth: 47 },
+          2: { fontStyle: 'bold', textColor: [71, 85, 105], cellWidth: 48 },
+          3: { textColor: [15, 23, 42], fontStyle: 'bold', cellWidth: 47 }
+        }
+      });
+
+      currentY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 8 : currentY + 45;
+    }
+
+    // Helper to check page break space
+    const checkPageBreak = (neededMm: number) => {
+      if (currentY + neededMm > 275) {
+        doc.addPage();
+        currentY = 20;
+      }
+    };
+
+    // 3. Ventas Diarias de Mostrador
+    if (incSales && monthSales.length > 0) {
+      checkPageBreak(35);
+      doc.setTextColor(2, 132, 199); // cyan-600
+      doc.setFontSize(10.5);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`2. VENTAS DE MOSTRADOR (${monthSales.length} comprobantes)`, 14, currentY);
+
+      const salesRows = monthSales.map(s => {
+        const itemsText = s.items.map(i => `${i.quantity}x ${i.productName}`).join(', ');
+        return [
+          s.saleNumber,
+          new Date(s.date).toLocaleDateString('es-AR'),
+          s.customerName,
+          s.paymentMethod.toUpperCase(),
+          itemsText,
+          formatCurrency(s.totalAmount),
+          formatCurrency(s.totalAmount - s.totalCost)
+        ];
+      });
+
+      const totalSalesAmount = monthSales.reduce((acc, s) => acc + s.totalAmount, 0);
+      const totalSalesProfit = monthSales.reduce((acc, s) => acc + (s.totalAmount - s.totalCost), 0);
+
+      salesRows.push([
+        'TOTALES',
+        '',
+        `${monthSales.length} ventas`,
+        '',
+        '',
+        formatCurrency(totalSalesAmount),
+        formatCurrency(totalSalesProfit)
+      ]);
+
+      autoTable(doc, {
+        startY: currentY + 3,
+        head: [['Nro Ticket', 'Fecha', 'Cliente', 'Medio Pago', 'Ítems', 'Total ($)', 'Ganancia ($)']],
+        body: salesRows,
+        headStyles: { fillColor: [2, 132, 199], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+        columnStyles: {
+          0: { cellWidth: 20 },
+          1: { cellWidth: 16 },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 22 },
+          4: { cellWidth: 50 },
+          5: { cellWidth: 24, halign: 'right', fontStyle: 'bold' },
+          6: { cellWidth: 24, halign: 'right' }
+        },
+        bodyStyles: { fontSize: 7, cellPadding: 2 },
+        alternateRowStyles: { fillColor: [240, 249, 255] }
+      });
+
+      currentY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 8 : currentY + 40;
+    }
+
+    // 4. Pedidos de Clientes a Producción
+    if (incOrders && monthOrders.length > 0) {
+      checkPageBreak(35);
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.setFontSize(10.5);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`3. PEDIDOS DE CLIENTES A PRODUCCIÓN (${monthOrders.length} pedidos)`, 14, currentY);
+
+      const ordersRows = monthOrders.map(o => {
+        const itemsText = o.items.map(i => `${i.quantity}x ${i.productName}`).join(', ');
+        return [
+          o.orderNumber,
+          o.customerName,
+          o.deliveryDate,
+          o.productionStatus.replace('_', ' ').toUpperCase(),
+          itemsText,
+          formatCurrency(o.totalAmount),
+          formatCurrency(o.depositAmount),
+          formatCurrency(o.remainingBalance)
+        ];
+      });
+
+      const totalOrdersAmount = monthOrders.reduce((acc, o) => acc + o.totalAmount, 0);
+      const totalDeposits = monthOrders.reduce((acc, o) => acc + o.depositAmount, 0);
+      const totalBalances = monthOrders.reduce((acc, o) => acc + o.remainingBalance, 0);
+
+      ordersRows.push([
+        'TOTALES',
+        `${monthOrders.length} pedidos`,
+        '',
+        '',
+        '',
+        formatCurrency(totalOrdersAmount),
+        formatCurrency(totalDeposits),
+        formatCurrency(totalBalances)
+      ]);
+
+      autoTable(doc, {
+        startY: currentY + 3,
+        head: [['Nro Pedido', 'Cliente', 'Entrega', 'Estado', 'Detalle Ítems', 'Total ($)', 'Seña ($)', 'Saldo ($)']],
+        body: ordersRows,
+        headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+        columnStyles: {
+          0: { cellWidth: 20 },
+          1: { cellWidth: 28 },
+          2: { cellWidth: 18 },
+          3: { cellWidth: 20 },
+          4: { cellWidth: 46 },
+          5: { cellWidth: 20, halign: 'right', fontStyle: 'bold' },
+          6: { cellWidth: 17, halign: 'right' },
+          7: { cellWidth: 17, halign: 'right' }
+        },
+        bodyStyles: { fontSize: 7, cellPadding: 2 },
+        alternateRowStyles: { fillColor: [248, 250, 252] }
+      });
+
+      currentY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 8 : currentY + 40;
+    }
+
+    // 5. Movimientos Financieros de Caja y Cuentas Corrientes
+    if (incMovements && monthMovements.length > 0) {
+      checkPageBreak(35);
+      doc.setTextColor(5, 150, 105); // emerald-600
+      doc.setFontSize(10.5);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`4. LIBRO DE MOVIMIENTOS FINANCIEROS Y CUENTAS CORRIENTES (${monthMovements.length} asientos)`, 14, currentY);
+
+      const movementsRows = monthMovements.map(m => [
+        new Date(m.date).toLocaleDateString('es-AR'),
+        m.referenceNumber || '-',
+        m.entityName,
+        m.type.replace('_', ' ').toUpperCase(),
+        m.concept,
+        m.paymentMethod ? m.paymentMethod.toUpperCase() : '-',
+        m.credit > 0 ? formatCurrency(m.credit) : '-',
+        m.debit > 0 ? formatCurrency(m.debit) : '-',
+        formatCurrency(m.balanceAfter)
+      ]);
+
+      const sumCredits = monthMovements.reduce((acc, m) => acc + (m.credit || 0), 0);
+      const sumDebits = monthMovements.reduce((acc, m) => acc + (m.debit || 0), 0);
+
+      movementsRows.push([
+        'TOTALES',
+        '',
+        `${monthMovements.length} movs`,
+        '',
+        '',
+        '',
+        formatCurrency(sumCredits),
+        formatCurrency(sumDebits),
+        ''
+      ]);
+
+      autoTable(doc, {
+        startY: currentY + 3,
+        head: [['Fecha', 'Ref / Nro', 'Entidad / Cliente', 'Tipo', 'Concepto', 'Medio', 'Haber (+)', 'Debe (-)', 'Saldo']],
+        body: movementsRows,
+        headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+        columnStyles: {
+          0: { cellWidth: 16 },
+          1: { cellWidth: 18 },
+          2: { cellWidth: 26 },
+          3: { cellWidth: 20 },
+          4: { cellWidth: 44 },
+          5: { cellWidth: 18 },
+          6: { cellWidth: 16, halign: 'right', fontStyle: 'bold', textColor: [4, 120, 87] },
+          7: { cellWidth: 16, halign: 'right', fontStyle: 'bold', textColor: [185, 28, 28] },
+          8: { cellWidth: 16, halign: 'right' }
+        },
+        bodyStyles: { fontSize: 7, cellPadding: 2 },
+        alternateRowStyles: { fillColor: [240, 253, 244] }
+      });
+
+      currentY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 8 : currentY + 40;
+    }
+
+    // 6. Compras de Insumos a Proveedores
+    if (incPurchases && monthPurchases.length > 0) {
+      checkPageBreak(30);
+      doc.setTextColor(109, 40, 217); // purple-700
+      doc.setFontSize(10.5);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`5. COMPRAS DE INSUMOS A PROVEEDORES (${monthPurchases.length} órdenes)`, 14, currentY);
+
+      const purchasesRows = monthPurchases.map(p => {
+        const itemsText = p.items.map(i => `${i.quantity}x ${i.productName}`).join(', ');
+        return [
+          p.orderNumber,
+          p.supplierName,
+          p.date,
+          p.invoiceNumber || '-',
+          p.status.toUpperCase(),
+          itemsText,
+          formatCurrency(p.totalAmount)
+        ];
+      });
+
+      const totalPurchasesAmount = monthPurchases.reduce((acc, p) => acc + p.totalAmount, 0);
+      purchasesRows.push([
+        'TOTALES',
+        `${monthPurchases.length} compras`,
+        '',
+        '',
+        '',
+        '',
+        formatCurrency(totalPurchasesAmount)
+      ]);
+
+      autoTable(doc, {
+        startY: currentY + 3,
+        head: [['Nro Orden', 'Proveedor', 'Fecha', 'Factura / Remito', 'Estado', 'Ítems Insumos', 'Total Invertido']],
+        body: purchasesRows,
+        headStyles: { fillColor: [109, 40, 217], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+        columnStyles: {
+          0: { cellWidth: 20 },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 18 },
+          3: { cellWidth: 22 },
+          4: { cellWidth: 18 },
+          5: { cellWidth: 54 },
+          6: { cellWidth: 24, halign: 'right', fontStyle: 'bold' }
+        },
+        bodyStyles: { fontSize: 7, cellPadding: 2 },
+        alternateRowStyles: { fillColor: [250, 245, 255] }
+      });
+
+      currentY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 8 : currentY + 35;
+    }
+
+    // 7. Insumos Críticos o Agotados
+    if (incAlerts && criticalProducts.length > 0) {
+      checkPageBreak(25);
+      doc.setTextColor(185, 28, 28); // rose-700
+      doc.setFontSize(10.5);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`6. INSUMOS EN NIVEL CRÍTICO O AGOTADOS (${criticalProducts.length} productos)`, 14, currentY);
+
+      const alertsRows = criticalProducts.map(p => [
+        p.sku,
+        p.name,
+        CATEGORY_LABELS[p.category]?.label || p.category,
+        p.size || '-',
+        `${p.currentStock} ${p.unit}`,
+        `${p.minStock} ${p.unit}`,
+        formatCurrency(p.costPrice),
+        p.currentStock === 0 ? 'AGOTADO' : 'CRÍTICO'
+      ]);
+
+      autoTable(doc, {
+        startY: currentY + 3,
+        head: [['SKU', 'Insumo / Producto', 'Rubro', 'Talle/Medida', 'Stock Actual', 'Stock Mínimo', 'Costo Unit.', 'Estado']],
+        body: alertsRows,
+        headStyles: { fillColor: [185, 28, 28], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+        columnStyles: {
+          0: { cellWidth: 20 },
+          1: { cellWidth: 48 },
+          2: { cellWidth: 26 },
+          3: { cellWidth: 18 },
+          4: { cellWidth: 20, halign: 'center' },
+          5: { cellWidth: 20, halign: 'center' },
+          6: { cellWidth: 20, halign: 'right' },
+          7: { cellWidth: 18, halign: 'center', fontStyle: 'bold' }
+        },
+        bodyStyles: { fontSize: 7, cellPadding: 2 },
+        alternateRowStyles: { fillColor: [254, 242, 242] }
+      });
+    }
+
+    // 8. Page Numbers & Watermark Footer
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text(
+        `${workshopName} · Reporte Mensual de Ventas y Movimientos (${summary.monthName} ${summary.year}) | Página ${i} de ${totalPages}`,
+        105,
+        290,
+        { align: 'center' }
+      );
+    }
+
+    const fileName = `Reporte_Mensual_Ventas_y_Movimientos_${summary.monthName}_${summary.year}.pdf`;
+    if (saveToFile) {
+      doc.save(fileName);
+    }
+    return doc;
+  }
+
+  /**
    * Export Account Statement to Excel (.xlsx)
    */
   static exportAccountStatementToExcel(

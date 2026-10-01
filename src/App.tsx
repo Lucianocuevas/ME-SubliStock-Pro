@@ -383,6 +383,8 @@ export default function App() {
             orders={orders}
             dailySales={dailySales}
             purchases={purchases}
+            accountMovements={accountMovements}
+            settings={settings}
           />
         )}
 
