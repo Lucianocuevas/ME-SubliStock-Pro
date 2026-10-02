@@ -118,6 +118,8 @@ export interface Customer {
   currentBalance: number; // saldo adeudado o a favor
   notes?: string;
   createdAt: string;
+  status?: 'activo' | 'inactivo';
+  isActive?: boolean;
 }
 
 export type ProductionStatus = 

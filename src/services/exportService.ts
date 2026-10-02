@@ -179,6 +179,297 @@ export class ExportService {
   }
 
   /**
+   * Export all inventory catalog to a formatted PDF report with executive summary and autoTable
+   */
+  static exportInventoryToPDF(
+    products: ProductItem[],
+    settings?: AppSettings,
+    options?: {
+      title?: string;
+      saveToFile?: boolean;
+    }
+  ): jsPDF {
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const workshopName = settings?.workshopName || 'SubliStock Pro';
+    const emissionDate = new Date().toLocaleDateString('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    const emissionTime = new Date().toLocaleTimeString('es-AR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    // Calculate Financial Summary
+    const totalItems = products.length;
+    const totalUnits = products.reduce((acc, p) => acc + p.currentStock, 0);
+    const totalCostValue = products.reduce((acc, p) => acc + (p.currentStock * p.costPrice), 0);
+    const totalSaleValue = products.reduce((acc, p) => acc + (p.currentStock * p.salePrice), 0);
+    const grossMargin = totalSaleValue - totalCostValue;
+    const marginPercent = totalCostValue > 0 ? Math.round((grossMargin / totalCostValue) * 100) : 0;
+    const criticalCount = products.filter(p => p.currentStock <= p.minStock && p.currentStock > 0).length;
+    const outOfStockCount = products.filter(p => p.currentStock === 0).length;
+
+    // Header Banner (Landscape 297mm width)
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(0, 0, 297, 28, 'F');
+
+    // Workshop Name & Title
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(workshopName.toUpperCase(), 14, 12);
+
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(203, 213, 225); // slate-300
+    const subtitle = [
+      settings?.slogan || 'Taller de Sublimación & Estampado Textil',
+      settings?.taxId ? `CUIT: ${settings.taxId}` : null,
+      settings?.phone ? `Tel: ${settings.phone}` : null,
+      settings?.address ? `${settings.address}, ${settings?.city || ''}` : null
+    ].filter(Boolean).join(' • ');
+    doc.text(subtitle, 14, 19);
+
+    // Document Title Badge on Right
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(251, 146, 60); // orange-400
+    doc.text('REPORTE GENERAL DE INVENTARIO Y STOCK', 283, 12, { align: 'right' });
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(148, 163, 184); // slate-400
+    doc.text(`Fecha de Emisión: ${emissionDate} ${emissionTime} hs`, 283, 19, { align: 'right' });
+
+    // Executive KPI Summary Cards (Y = 32)
+    const kpiY = 32;
+    const cardH = 16;
+    const cardW = 44;
+    const gap = 3;
+
+    // KPI 1: Total Insumos
+    doc.setFillColor(241, 245, 249); // slate-100
+    doc.roundedRect(14, kpiY, cardW, cardH, 2, 2, 'F');
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text('CATÁLOGO DE INSUMOS', 17, kpiY + 5);
+    doc.setFontSize(10.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${totalItems} productos`, 17, kpiY + 12);
+
+    // KPI 2: Unidades Físicas
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(14 + (cardW + gap), kpiY, cardW, cardH, 2, 2, 'F');
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('UNIDADES EN TALLER', 14 + (cardW + gap) + 3, kpiY + 5);
+    doc.setFontSize(10.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${totalUnits.toLocaleString('es-AR')} unidades`, 14 + (cardW + gap) + 3, kpiY + 12);
+
+    // KPI 3: Valoración al Costo
+    doc.setFillColor(236, 253, 245); // emerald-50
+    doc.roundedRect(14 + (cardW + gap) * 2, kpiY, cardW + 2, cardH, 2, 2, 'F');
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(5, 150, 105);
+    doc.text('CAPITAL VALUADO (COSTO)', 14 + (cardW + gap) * 2 + 3, kpiY + 5);
+    doc.setFontSize(10.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(4, 120, 87);
+    doc.text(formatCurrency(totalCostValue), 14 + (cardW + gap) * 2 + 3, kpiY + 12);
+
+    // KPI 4: Valoración a la Venta
+    doc.setFillColor(238, 242, 255); // indigo-50
+    doc.roundedRect(14 + (cardW + gap) * 3 + 2, kpiY, cardW + 2, cardH, 2, 2, 'F');
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(79, 70, 229);
+    doc.text('POTENCIAL A LA VENTA', 14 + (cardW + gap) * 3 + 5, kpiY + 5);
+    doc.setFontSize(10.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(67, 56, 202);
+    doc.text(formatCurrency(totalSaleValue), 14 + (cardW + gap) * 3 + 5, kpiY + 12);
+
+    // KPI 5: Margen Proyectado
+    doc.setFillColor(254, 243, 199); // amber-50
+    doc.roundedRect(14 + (cardW + gap) * 4 + 4, kpiY, cardW, cardH, 2, 2, 'F');
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(180, 83, 9);
+    doc.text('MARGEN PROYECTADO', 14 + (cardW + gap) * 4 + 7, kpiY + 5);
+    doc.setFontSize(10.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(146, 64, 14);
+    doc.text(`+${marginPercent}% (${formatCurrency(grossMargin)})`, 14 + (cardW + gap) * 4 + 7, kpiY + 12);
+
+    // KPI 6: Alertas Críticas / Agotados
+    const alertBg = (outOfStockCount > 0 || criticalCount > 0) ? [254, 242, 242] : [240, 253, 244];
+    doc.setFillColor(alertBg[0], alertBg[1], alertBg[2]);
+    doc.roundedRect(14 + (cardW + gap) * 5 + 4, kpiY, cardW - 3, cardH, 2, 2, 'F');
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(outOfStockCount > 0 ? 185 : 21, outOfStockCount > 0 ? 28 : 128, outOfStockCount > 0 ? 28 : 61);
+    doc.text('ESTADO DE ALERTA', 14 + (cardW + gap) * 5 + 7, kpiY + 5);
+    doc.setFontSize(10.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${outOfStockCount} agot. · ${criticalCount} crít.`, 14 + (cardW + gap) * 5 + 7, kpiY + 12);
+
+    // Prepare table rows
+    const tableData = products.map(p => {
+      const cat = CATEGORY_LABELS[p.category]?.label || p.category;
+      const mat = MATERIAL_LABELS[p.material] || p.material;
+      const talleColor = [p.size ? `T: ${p.size}` : null, p.color].filter(Boolean).join(' / ') || '-';
+      const rowValuation = p.currentStock * p.costPrice;
+
+      let status = 'ÓPTIMO';
+      if (p.currentStock === 0) status = '¡AGOTADO!';
+      else if (p.currentStock <= p.minStock) status = 'CRÍTICO';
+      else if (p.currentStock <= p.minStock * 1.4) status = 'BAJO';
+
+      return [
+        p.sku,
+        p.name,
+        cat,
+        mat,
+        talleColor,
+        `${p.currentStock} ${p.unit}`,
+        `${p.minStock} ${p.unit}`,
+        formatCurrency(p.costPrice),
+        formatCurrency(p.salePrice),
+        formatCurrency(rowValuation),
+        p.location || 'Taller',
+        status
+      ];
+    });
+
+    // Render Table
+    autoTable(doc, {
+      startY: 52,
+      head: [[
+        'SKU',
+        'Insumo / Descripción',
+        'Rubro',
+        'Material',
+        'Talle/Color',
+        'Stock',
+        'Mín.',
+        'Costo Unit.',
+        'P. Venta',
+        'Valuación Costo',
+        'Ubicación',
+        'Estado'
+      ]],
+      body: tableData,
+      foot: [[
+        'TOTALES',
+        `${totalItems} insumos en catálogo`,
+        '',
+        '',
+        '',
+        `${totalUnits.toLocaleString('es-AR')} un.`,
+        '',
+        '',
+        '',
+        formatCurrency(totalCostValue),
+        '',
+        `${outOfStockCount} Agot. / ${criticalCount} Crít.`
+      ]],
+      headStyles: {
+        fillColor: [15, 23, 42],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 7.5,
+        halign: 'left',
+        cellPadding: 2
+      },
+      footStyles: {
+        fillColor: [30, 41, 59],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 8,
+        cellPadding: 2.5
+      },
+      bodyStyles: {
+        fontSize: 7,
+        cellPadding: 1.8,
+        textColor: [30, 41, 59]
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252]
+      },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 22 }, // SKU
+        1: { cellWidth: 50 }, // Name
+        2: { cellWidth: 26 }, // Category
+        3: { cellWidth: 24 }, // Material
+        4: { cellWidth: 22 }, // Talle/Color
+        5: { halign: 'right', fontStyle: 'bold', cellWidth: 18 }, // Stock
+        6: { halign: 'right', cellWidth: 15 }, // Min
+        7: { halign: 'right', cellWidth: 20 }, // Cost Price
+        8: { halign: 'right', fontStyle: 'bold', cellWidth: 20 }, // Sale Price
+        9: { halign: 'right', fontStyle: 'bold', cellWidth: 24 }, // Total Valuation
+        10: { cellWidth: 18 }, // Location
+        11: { halign: 'center', fontStyle: 'bold', cellWidth: 20 } // Estado
+      },
+      didParseCell: (data) => {
+        // Highlight status cell
+        if (data.section === 'body' && data.column.index === 11) {
+          const val = String(data.cell.raw);
+          if (val === '¡AGOTADO!') {
+            data.cell.styles.textColor = [225, 29, 72];
+            data.cell.styles.fontStyle = 'bold';
+          } else if (val === 'CRÍTICO') {
+            data.cell.styles.textColor = [217, 119, 6];
+            data.cell.styles.fontStyle = 'bold';
+          } else if (val === 'BAJO') {
+            data.cell.styles.textColor = [202, 138, 4];
+          } else {
+            data.cell.styles.textColor = [16, 185, 129];
+          }
+        }
+      },
+      didDrawPage: (data) => {
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(148, 163, 184);
+
+        doc.text(
+          `${workshopName} • Reporte de Inventario de Insumos • Documento de Control Interno`,
+          14,
+          202
+        );
+        doc.text(
+          `Página ${data.pageNumber} de ${pageCount}`,
+          283,
+          202,
+          { align: 'right' }
+        );
+      },
+      margin: { top: 52, right: 14, bottom: 12, left: 14 }
+    });
+
+    const shouldSave = options?.saveToFile ?? true;
+    if (shouldSave) {
+      const cleanWorkshop = workshopName.replace(/[^a-zA-Z0-9]/g, '_');
+      doc.save(`Inventario_Stock_${cleanWorkshop}_${new Date().toISOString().split('T')[0]}.pdf`);
+    }
+
+    return doc;
+  }
+
+  /**
    * Generate formal PDF Monthly Report with jsPDF
    */
   static exportMonthlyReportToPDF(

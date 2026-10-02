@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import {
   Smartphone,
   Laptop,
@@ -17,10 +18,14 @@ import {
   ShieldCheck,
   Sparkles,
   Zap,
-  Info
+  Info,
+  Download,
+  Monitor
 } from 'lucide-react';
 import { FirestoreService, FirestoreSyncInfo } from '../../services/firestoreService';
 import firebaseConfig from '../../../firebase-applet-config.json';
+import { AndroidApkModal } from '../modals/AndroidApkModal';
+import { WindowsExeModal } from '../modals/WindowsExeModal';
 
 export const MultiDeviceView: React.FC = () => {
   const [syncInfo, setSyncInfo] = useState<FirestoreSyncInfo>(FirestoreService.getSyncInfo());
@@ -30,6 +35,10 @@ export const MultiDeviceView: React.FC = () => {
   const [connectionResult, setConnectionResult] = useState<{ connected: boolean; latencyMs?: number; error?: string } | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [appUrl, setAppUrl] = useState('');
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+  const [qrError, setQrError] = useState<string | null>(null);
+  const [isApkModalOpen, setIsApkModalOpen] = useState(false);
+  const [isWindowsExeModalOpen, setIsWindowsExeModalOpen] = useState(false);
 
   useEffect(() => {
     // Current application URL for accessing from phone or other PCs
@@ -52,10 +61,44 @@ export const MultiDeviceView: React.FC = () => {
     };
   }, []);
 
+  // Generate QR Code locally whenever appUrl updates
+  useEffect(() => {
+    const targetUrl = appUrl || window.location.href;
+    if (!targetUrl) return;
+
+    QRCode.toDataURL(targetUrl, {
+      width: 320,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: {
+        dark: '#000000', // High contrast pure black for instant mobile camera detection
+        light: '#ffffff'
+      }
+    })
+      .then(url => {
+        setQrCodeDataUrl(url);
+        setQrError(null);
+      })
+      .catch(err => {
+        console.error('Error generando código QR:', err);
+        setQrError('No se pudo generar el código QR.');
+      });
+  }, [appUrl]);
+
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(appUrl);
     setCopiedUrl(true);
     setTimeout(() => setCopiedUrl(false), 2500);
+  };
+
+  const handleDownloadQr = () => {
+    if (!qrCodeDataUrl) return;
+    const link = document.createElement('a');
+    link.download = 'sublistock-acceso-qr.png';
+    link.href = qrCodeDataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleTestConnection = async () => {
@@ -82,11 +125,6 @@ export const MultiDeviceView: React.FC = () => {
       alert(`Error al descargar: ${res.error}`);
     }
   };
-
-  // QR code image generation using standard reliable service
-  const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&bgcolor=02-06-17&color=38-bdf8&margin=1&data=${encodeURIComponent(
-    appUrl || 'https://sublistock.app'
-  )}`;
 
   return (
     <div className="space-y-6">
@@ -123,35 +161,146 @@ export const MultiDeviceView: React.FC = () => {
         </div>
       </div>
 
+      {/* Quick Download Action Cards for Android & Windows */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Card 1: App Android */}
+        <div className="bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-700/60 hover:border-emerald-500 rounded-xl p-5 flex flex-col justify-between gap-4 shadow-lg transition-all">
+          <div className="flex items-start gap-3.5">
+            <div className="w-12 h-12 rounded-xl bg-emerald-950 border border-emerald-600/70 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
+              <Smartphone className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-bold text-white">
+                  App Android (APK & WebAPK)
+                </h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 uppercase">
+                  Celulares & Tablets
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Instala la aplicación en tu teléfono Android en 1 solo clic o descarga el paquete APK para usar la cámara y escanear productos en el taller.
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-3">
+            <span className="text-[11px] text-slate-400">
+              Compatible con Samsung, Xiaomi, Motorola y más
+            </span>
+            <button
+              onClick={() => setIsApkModalOpen(true)}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-emerald-950/60 cursor-pointer shrink-0"
+            >
+              <Smartphone className="w-4 h-4" />
+              <span>Abrir App Android / APK</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Card 2: App Windows */}
+        <div className="bg-gradient-to-br from-cyan-950/40 via-slate-900 to-slate-900 border border-cyan-700/60 hover:border-cyan-500 rounded-xl p-5 flex flex-col justify-between gap-4 shadow-lg transition-all">
+          <div className="flex items-start gap-3.5">
+            <div className="w-12 h-12 rounded-xl bg-cyan-950 border border-cyan-600/70 flex items-center justify-center text-cyan-400 shrink-0 shadow-inner">
+              <Monitor className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-bold text-white">
+                  App Windows (.EXE & Desktop)
+                </h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 uppercase">
+                  Windows 10 / 11
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Ejecutable nativo SubliStockPro.exe y lanzador de escritorio sin barras de navegador. Incluye acceso directo para abrir el taller con 1 clic.
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-3">
+            <span className="text-[11px] text-slate-400">
+              Genera SubliStockPro.exe nativo en 2 segundos
+            </span>
+            <button
+              onClick={() => setIsWindowsExeModalOpen(true)}
+              className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-cyan-950/60 cursor-pointer shrink-0"
+            >
+              <Monitor className="w-4 h-4" />
+              <span>Descargar App Windows (.EXE)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* QR Code and Mobile Access Card */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* QR Code Box */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-4 shadow-xl">
-          <div className="p-3 bg-slate-950 rounded-2xl border border-cyan-900/50 shadow-inner flex items-center justify-center">
-            {appUrl ? (
+          <div className="p-4 bg-white rounded-2xl border-2 border-cyan-500/40 shadow-xl shadow-cyan-950/20 flex items-center justify-center min-w-[210px] min-h-[210px] transition-all hover:scale-[1.02]">
+            {qrCodeDataUrl ? (
               <img
-                src={qrCodeImageUrl}
-                alt="Escanear QR para abrir en celular"
-                className="w-48 h-48 rounded-lg"
+                src={qrCodeDataUrl}
+                alt="Código QR para abrir en celular"
+                className="w-48 h-48 rounded-lg block shadow-xs"
               />
+            ) : qrError ? (
+              <div className="w-48 h-48 flex flex-col items-center justify-center text-rose-500 p-2 text-center text-xs">
+                <QrCode className="w-10 h-10 mb-2 opacity-50" />
+                <span>{qrError}</span>
+              </div>
             ) : (
-              <div className="w-48 h-48 flex items-center justify-center text-slate-500">
-                <QrCode className="w-12 h-12" />
+              <div className="w-48 h-48 flex flex-col items-center justify-center text-slate-400">
+                <RefreshCw className="w-8 h-8 animate-spin text-cyan-600 mb-2" />
+                <span className="text-xs font-semibold text-slate-600">Generando QR...</span>
               </div>
             )}
           </div>
 
           <div className="space-y-1">
-            <span className="text-xs uppercase tracking-wider font-bold text-cyan-400 block">
-              Escanea con tu Celular
+            <span className="text-xs uppercase tracking-wider font-bold text-cyan-400 flex items-center justify-center gap-1.5">
+              <QrCode className="w-4 h-4" />
+              <span>Escanea con tu Celular</span>
             </span>
-            <p className="text-xs text-slate-400 max-w-xs">
-              Apunta la cámara de tu teléfono (Android o iPhone) para abrir la aplicación directamente en tu navegador móvil.
+            <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
+              Apunta la cámara de tu teléfono móvil (Android o iPhone) para abrir la aplicación instantáneamente.
             </p>
           </div>
 
+          {/* Action buttons under QR */}
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+            <button
+              onClick={handleDownloadQr}
+              disabled={!qrCodeDataUrl}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Descargar imagen del código QR en PNG"
+            >
+              <Download className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Descargar QR (PNG)</span>
+            </button>
+
+            <button
+              onClick={() => setIsApkModalOpen(true)}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md shadow-emerald-950/40 cursor-pointer"
+              title="Descargar paquete APK para Android o instalar como aplicación nativa"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>Instalar / Descargar APK</span>
+            </button>
+
+            <button
+              onClick={() => setIsWindowsExeModalOpen(true)}
+              className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md shadow-cyan-950/40 cursor-pointer"
+              title="Descargar instalador o ejecutable para Windows (.exe)"
+            >
+              <Monitor className="w-3.5 h-3.5" />
+              <span>App Windows (.EXE)</span>
+            </button>
+          </div>
+
           {/* Copy URL */}
-          <div className="w-full pt-2">
+          <div className="w-full pt-1">
             <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-1.5 pl-3">
               <span className="text-[11px] font-mono text-slate-300 truncate flex-1">{appUrl}</span>
               <button
@@ -391,8 +540,30 @@ export const MultiDeviceView: React.FC = () => {
               </span>
             </li>
           </ol>
+
+          <div className="pt-2 border-t border-slate-800">
+            <button
+              onClick={() => setIsWindowsExeModalOpen(true)}
+              className="w-full px-3 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md shadow-cyan-950/50 cursor-pointer"
+            >
+              <Monitor className="w-4 h-4" />
+              <span>Descargar SubliStockPro.exe para Windows</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Android APK & WebAPK Modal */}
+      <AndroidApkModal
+        isOpen={isApkModalOpen}
+        onClose={() => setIsApkModalOpen(false)}
+      />
+
+      {/* Windows EXE Desktop Modal */}
+      <WindowsExeModal
+        isOpen={isWindowsExeModalOpen}
+        onClose={() => setIsWindowsExeModalOpen(false)}
+      />
     </div>
   );
 };

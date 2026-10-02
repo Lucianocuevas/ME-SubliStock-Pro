@@ -12,7 +12,6 @@ import {
   Shield,
   Settings as SettingsIcon,
   BellOff,
-  Smartphone,
   Cloud,
   Wifi,
   WifiOff
@@ -287,16 +286,6 @@ export const Header: React.FC<Props> = ({
             title="Configuración de la Empresa, Logo, Datos y Alertas"
           >
             <SettingsIcon className="w-4 h-4" />
-          </button>
-
-          {/* Quick Multi-Device & Mobile Access */}
-          <button
-            onClick={() => onNavigateTab('multi_device')}
-            className="p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-900 rounded-lg transition-colors border border-slate-800/60 flex items-center gap-1"
-            title="Acceso Multi-Dispositivo (PC, Android & iOS con la misma base de datos)"
-          >
-            <Smartphone className="w-4 h-4 text-cyan-400" />
-            <span className="hidden lg:inline text-[10px] font-bold text-cyan-400">Móvil/Nube</span>
           </button>
         </div>
       </div>

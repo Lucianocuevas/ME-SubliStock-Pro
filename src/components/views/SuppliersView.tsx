@@ -11,7 +11,8 @@ import {
   Search,
   Check,
   Calendar,
-  Layers
+  Layers,
+  Trash2
 } from 'lucide-react';
 import { Supplier, PurchaseOrder } from '../../types';
 import { StorageService, formatCurrency } from '../../services/storageService';
@@ -36,6 +37,8 @@ export const SuppliersView: React.FC<Props> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'suppliers' | 'purchases'>('suppliers');
   const [searchTerm, setSearchTerm] = useState('');
+  const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null);
+  const [purchaseToDelete, setPurchaseToDelete] = useState<PurchaseOrder | null>(null);
 
   const handleMarkAsReceived = (orderId: string) => {
     if (confirm('¿Confirmas la recepción de esta mercadería? Se sumará automáticamente el stock a tu taller.')) {
@@ -201,6 +204,13 @@ export const SuppliersView: React.FC<Props> = ({
                       Editar
                     </button>
                     <button
+                      onClick={() => setSupplierToDelete(supplier)}
+                      className="p-1.5 bg-slate-800 hover:bg-rose-950/70 text-slate-400 hover:text-rose-400 rounded-lg transition-colors border border-slate-700/60"
+                      title="Eliminar proveedor"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => onOpenNewPurchase(supplier.id)}
                       className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-colors"
                     >
@@ -281,17 +291,24 @@ export const SuppliersView: React.FC<Props> = ({
                         </td>
 
                         <td className="py-3.5 px-4 text-right">
-                          {purchase.status === 'pendiente' ? (
+                          <div className="flex items-center justify-end gap-1.5">
+                            {purchase.status === 'pendiente' && (
+                              <button
+                                onClick={() => handleMarkAsReceived(purchase.id)}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[11px] font-bold flex items-center gap-1 shadow transition-colors"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Recibido</span>
+                              </button>
+                            )}
                             <button
-                              onClick={() => handleMarkAsReceived(purchase.id)}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[11px] font-bold flex items-center gap-1 ml-auto shadow transition-colors"
+                              onClick={() => setPurchaseToDelete(purchase)}
+                              className="p-1 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors"
+                              title="Eliminar compra"
                             >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Marcar Recibido</span>
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                          ) : (
-                            <span className="text-slate-500 text-[11px]">En almacén</span>
-                          )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -304,6 +321,90 @@ export const SuppliersView: React.FC<Props> = ({
           <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between text-xs text-slate-400">
             <span>Total compras recibidas e ingresadas a inventario:</span>
             <strong className="text-white text-base font-bold">{formatCurrency(totalSpentPurchases)}</strong>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Supplier Modal */}
+      {supplierToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="w-10 h-10 rounded-lg bg-rose-950/60 border border-rose-800/80 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-base">¿Eliminar Proveedor?</h3>
+                <p className="text-xs text-slate-400">{supplierToDelete.name}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              ¿Confirmas que deseas eliminar a este proveedor? Se quitará de tu directorio de proveedores habituales.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setSupplierToDelete(null)}
+                className="px-4 py-2 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  StorageService.deleteSupplier(supplierToDelete.id);
+                  setSupplierToDelete(null);
+                  onRefreshData();
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors shadow-lg shadow-rose-950/50"
+              >
+                Sí, Eliminar Proveedor
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Purchase Order Modal */}
+      {purchaseToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="w-10 h-10 rounded-lg bg-rose-950/60 border border-rose-800/80 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-base">¿Eliminar Compra?</h3>
+                <p className="text-xs text-slate-400 font-mono">{purchaseToDelete.orderNumber}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              ¿Deseas eliminar el registro de esta orden de compra con {purchaseToDelete.supplierName}?
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setPurchaseToDelete(null)}
+                className="px-4 py-2 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  StorageService.deletePurchaseOrder(purchaseToDelete.id);
+                  setPurchaseToDelete(null);
+                  onRefreshData();
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors shadow-lg shadow-rose-950/50"
+              >
+                Sí, Eliminar Compra
+              </button>
+            </div>
           </div>
         </div>
       )}

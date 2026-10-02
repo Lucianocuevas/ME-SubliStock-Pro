@@ -31,7 +31,6 @@ import { QuotationsView } from './components/views/QuotationsView';
 import { UsersView } from './components/views/UsersView';
 import { BackendCloudView } from './components/views/BackendCloudView';
 import { CurrentAccountsView } from './components/views/CurrentAccountsView';
-import { GitHubDeployView } from './components/views/GitHubDeployView';
 import { MultiDeviceView } from './components/views/MultiDeviceView';
 import { FirestoreService } from './services/firestoreService';
 
@@ -48,6 +47,8 @@ import { NewQuotationModal } from './components/modals/NewQuotationModal';
 import { QuotationPrintModal } from './components/modals/QuotationPrintModal';
 import { NewPaymentModal } from './components/modals/NewPaymentModal';
 import { CloudSyncModal } from './components/modals/CloudSyncModal';
+import { AndroidApkModal } from './components/modals/AndroidApkModal';
+import { WindowsExeModal } from './components/modals/WindowsExeModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -71,6 +72,7 @@ export default function App() {
   const [isCustomerOrderOpen, setIsCustomerOrderOpen] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState<ProductItem | null>(null);
+  const [initialSkuForNewProduct, setInitialSkuForNewProduct] = useState<string | undefined>(undefined);
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [preselectedSupplierId, setPreselectedSupplierId] = useState<string | undefined>(undefined);
   const [isQuickRestockOpen, setIsQuickRestockOpen] = useState(false);
@@ -89,6 +91,21 @@ export default function App() {
 
   // Cloud Sync & Local Offline Modal
   const [isCloudSyncOpen, setIsCloudSyncOpen] = useState(false);
+  const [isAndroidApkOpen, setIsAndroidApkOpen] = useState(false);
+  const [isWindowsExeOpen, setIsWindowsExeOpen] = useState(false);
+
+  // Preference states: Show/Hide Android Access & MultiDevice Tab
+  const [showAndroidAccess, setShowAndroidAccess] = useState<boolean>(() => {
+    return localStorage.getItem('sublistock_show_android_header') !== 'false';
+  });
+  const [showMultiDeviceTab, setShowMultiDeviceTab] = useState<boolean>(() => {
+    return localStorage.getItem('sublistock_show_multidevice_tab') !== 'false';
+  });
+
+  const handleHideAndroidAccess = () => {
+    setShowAndroidAccess(false);
+    localStorage.setItem('sublistock_show_android_header', 'false');
+  };
 
   // Quotation Modals
   const [isNewQuotationOpen, setIsNewQuotationOpen] = useState(false);
@@ -128,6 +145,12 @@ export default function App() {
     window.addEventListener('sublistock_users_updated', handleUpdate);
     window.addEventListener('sublistock_auth_changed', handleUpdate);
 
+    const handlePrefs = () => {
+      setShowAndroidAccess(localStorage.getItem('sublistock_show_android_header') !== 'false');
+      setShowMultiDeviceTab(localStorage.getItem('sublistock_show_multidevice_tab') !== 'false');
+    };
+    window.addEventListener('sublistock_prefs_updated', handlePrefs);
+
     // Listen to real-time sync events from other devices (PC, Android, iOS) via Firestore
     const unsubscribeCloud = FirestoreService.listenToRemoteSync(() => {
       FirestoreService.downloadAllFromCloud().then(res => {
@@ -149,6 +172,7 @@ export default function App() {
       window.removeEventListener('sublistock_movements_updated', handleUpdate);
       window.removeEventListener('sublistock_users_updated', handleUpdate);
       window.removeEventListener('sublistock_auth_changed', handleUpdate);
+      window.removeEventListener('sublistock_prefs_updated', handlePrefs);
       if (unsubscribeCloud) unsubscribeCloud();
     };
   }, [loadData]);
@@ -164,6 +188,13 @@ export default function App() {
   // Handlers for Opening Modals
   const handleOpenNewProduct = () => {
     setProductToEdit(null);
+    setInitialSkuForNewProduct(undefined);
+    setIsProductModalOpen(true);
+  };
+
+  const handleOpenNewProductWithSku = (sku?: string) => {
+    setProductToEdit(null);
+    setInitialSkuForNewProduct(sku);
     setIsProductModalOpen(true);
   };
 
@@ -243,6 +274,7 @@ export default function App() {
         productsCount={products.length}
         quotationsCount={quotations.length}
         debtorCustomersCount={customers.filter(c => c.currentBalance > 0).length}
+        showMultiDeviceTab={showMultiDeviceTab}
       />
 
       {/* Main Content View */}
@@ -267,6 +299,7 @@ export default function App() {
           <InventoryView
             products={products}
             onOpenNewProduct={handleOpenNewProduct}
+            onOpenNewProductWithSku={handleOpenNewProductWithSku}
             onEditProduct={handleEditProduct}
             onQuickRestock={handleQuickRestock}
             onRefreshData={loadData}
@@ -355,10 +388,6 @@ export default function App() {
               setIsPaymentModalOpen(true);
             }}
           />
-        )}
-
-        {activeTab === 'github_deploy' && (
-          <GitHubDeployView />
         )}
 
         {activeTab === 'multi_device' && (
@@ -461,10 +490,24 @@ export default function App() {
         onDataRefreshed={loadData}
       />
 
+      <AndroidApkModal
+        isOpen={isAndroidApkOpen}
+        onClose={() => setIsAndroidApkOpen(false)}
+      />
+
+      <WindowsExeModal
+        isOpen={isWindowsExeOpen}
+        onClose={() => setIsWindowsExeOpen(false)}
+      />
+
       <NewProductModal
         isOpen={isProductModalOpen}
-        onClose={() => setIsProductModalOpen(false)}
+        onClose={() => {
+          setIsProductModalOpen(false);
+          setInitialSkuForNewProduct(undefined);
+        }}
         productToEdit={productToEdit}
+        initialSku={initialSkuForNewProduct}
         suppliers={suppliers}
         onProductSaved={loadData}
       />

@@ -10,10 +10,11 @@ import {
   Search,
   DollarSign,
   User,
-  Filter
+  Filter,
+  Trash2
 } from 'lucide-react';
 import { CustomerOrder, ProductionStatus } from '../../types';
-import { formatCurrency, calculateOrderUrgency } from '../../services/storageService';
+import { formatCurrency, calculateOrderUrgency, StorageService } from '../../services/storageService';
 import { STATUS_LABELS } from '../../data/initialData';
 
 interface Props {
@@ -21,6 +22,7 @@ interface Props {
   onOpenNewOrder: () => void;
   onSelectOrder: (order: CustomerOrder) => void;
   onUpdateOrderStatus: (orderId: string, status: ProductionStatus) => void;
+  onOrderDeleted?: () => void;
 }
 
 export const OrdersProductionView: React.FC<Props> = ({
@@ -32,6 +34,16 @@ export const OrdersProductionView: React.FC<Props> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [urgencyFilter, setUrgencyFilter] = useState<'all' | 'urgent' | 'today' | 'active'>('all');
+  const [orderToDelete, setOrderToDelete] = useState<CustomerOrder | null>(null);
+  const [restoreStockOnDelete, setRestoreStockOnDelete] = useState(true);
+
+  const confirmDeleteOrder = () => {
+    if (orderToDelete) {
+      StorageService.deleteCustomerOrder(orderToDelete.id, restoreStockOnDelete);
+      setOrderToDelete(null);
+      onOrderDeleted?.();
+    }
+  };
 
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
@@ -269,6 +281,17 @@ export const OrdersProductionView: React.FC<Props> = ({
                       Ver Detalle / Cobrar / Imprimir
                     </button>
 
+                    <button
+                      onClick={() => {
+                        setOrderToDelete(order);
+                        setRestoreStockOnDelete(order.productionStatus !== 'entregado');
+                      }}
+                      className="p-2 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors shrink-0"
+                      title="Eliminar pedido permanentemente"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+
                     {order.productionStatus !== 'entregado' && (
                       <button
                         onClick={() => {
@@ -293,6 +316,56 @@ export const OrdersProductionView: React.FC<Props> = ({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Delete Order Confirmation Modal */}
+      {orderToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="w-10 h-10 rounded-lg bg-rose-950/60 border border-rose-800/80 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-base">¿Eliminar Pedido?</h3>
+                <p className="text-xs text-slate-400 font-mono">{orderToDelete.orderNumber} · {orderToDelete.customerName}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              ¿Estás seguro de que deseas eliminar este pedido? Esta acción no se puede deshacer y borrará el registro de producción y los cargos vinculados.
+            </p>
+
+            <label className="flex items-center gap-2 p-2.5 bg-slate-950 rounded-lg border border-slate-800 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={restoreStockOnDelete}
+                onChange={e => setRestoreStockOnDelete(e.target.checked)}
+                className="rounded border-slate-700 text-cyan-600 focus:ring-0 w-4 h-4"
+              />
+              <span className="text-xs text-slate-200">
+                Restaurar automáticamente los insumos al stock del inventario
+              </span>
+            </label>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setOrderToDelete(null)}
+                className="px-4 py-2 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteOrder}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors shadow-lg shadow-rose-950/50"
+              >
+                Sí, Eliminar Pedido
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

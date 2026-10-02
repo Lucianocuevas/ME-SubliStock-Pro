@@ -289,6 +289,30 @@ export class StorageService {
     }
   }
 
+  static setProductStock(productId: string, newStock: number): ProductItem | null {
+    const products = this.getProducts();
+    const item = products.find(p => p.id === productId);
+    if (item) {
+      item.currentStock = Math.max(0, newStock);
+      item.lastRestocked = new Date().toISOString().split('T')[0];
+      this.saveProducts(products);
+      return item;
+    }
+    return null;
+  }
+
+  static adjustProductStock(productId: string, delta: number): ProductItem | null {
+    const products = this.getProducts();
+    const item = products.find(p => p.id === productId);
+    if (item) {
+      item.currentStock = Math.max(0, item.currentStock + delta);
+      item.lastRestocked = new Date().toISOString().split('T')[0];
+      this.saveProducts(products);
+      return item;
+    }
+    return null;
+  }
+
   // ALERTS CALCULATION & DISMISSAL
   static getStockAlerts(includeDismissed = false): StockAlert[] {
     const settings = this.getSettings();
@@ -450,17 +474,7 @@ export class StorageService {
       return INITIAL_PURCHASES;
     }
     try {
-      const list: PurchaseOrder[] = JSON.parse(raw);
-      if (list.length < INITIAL_PURCHASES.length) {
-        const existingIds = new Set(list.map(p => p.id));
-        const missing = INITIAL_PURCHASES.filter(p => !existingIds.has(p.id));
-        if (missing.length > 0) {
-          const merged = [...list, ...missing];
-          this.savePurchaseOrders(merged);
-          return merged;
-        }
-      }
-      return list;
+      return JSON.parse(raw);
     } catch {
       return INITIAL_PURCHASES;
     }
@@ -470,6 +484,11 @@ export class StorageService {
     localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify(purchases));
     this.recordLocalChange();
     window.dispatchEvent(new Event('sublistock_purchases_updated'));
+  }
+
+  static deletePurchaseOrder(purchaseId: string): void {
+    const purchases = this.getPurchaseOrders().filter(p => p.id !== purchaseId);
+    this.savePurchaseOrders(purchases);
   }
 
   static addPurchaseOrder(order: Omit<PurchaseOrder, 'id' | 'orderNumber'>): PurchaseOrder {
@@ -561,6 +580,22 @@ export class StorageService {
     }
   }
 
+  static deleteCustomer(customerId: string): void {
+    const customers = this.getCustomers().filter(c => c.id !== customerId);
+    this.saveCustomers(customers);
+  }
+
+  static toggleCustomerActive(customerId: string): Customer | null {
+    const customers = this.getCustomers();
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) return null;
+    const isCurrentlyActive = customer.status !== 'inactivo' && customer.isActive !== false;
+    customer.status = isCurrentlyActive ? 'inactivo' : 'activo';
+    customer.isActive = !isCurrentlyActive;
+    this.saveCustomers(customers);
+    return customer;
+  }
+
   // CUSTOMER ORDERS (PEDIDOS CON PRODUCCIÓN Y FECHAS DE ENTREGA)
   static getCustomerOrders(): CustomerOrder[] {
     const raw = localStorage.getItem(STORAGE_KEYS.ORDERS);
@@ -579,6 +614,38 @@ export class StorageService {
     localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
     this.recordLocalChange();
     window.dispatchEvent(new Event('sublistock_orders_updated'));
+  }
+
+  static deleteCustomerOrder(orderId: string, restoreStock: boolean = true): void {
+    const orders = this.getCustomerOrders();
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    if (restoreStock && order.items && order.items.length > 0 && order.productionStatus !== 'entregado') {
+      const products = this.getProducts();
+      for (const item of order.items) {
+        const prod = products.find(p => p.id === item.productId);
+        if (prod) {
+          prod.currentStock += item.quantity;
+        }
+      }
+      this.saveProducts(products);
+    }
+
+    const customers = this.getCustomers();
+    const customer = customers.find(c => c.id === order.customerId);
+    if (customer) {
+      customer.totalOrdersCount = Math.max(0, customer.totalOrdersCount - 1);
+      customer.totalSpent = Math.max(0, customer.totalSpent - order.totalAmount);
+      this.saveCustomers(customers);
+    }
+
+    const filtered = orders.filter(o => o.id !== orderId);
+    this.saveCustomerOrders(filtered);
+
+    // Clean linked account movements
+    const movements = this.getAccountMovements().filter(m => m.referenceId !== orderId && m.referenceNumber !== order.orderNumber);
+    this.saveAccountMovements(movements);
   }
 
   static addCustomerOrder(order: Omit<CustomerOrder, 'id' | 'orderNumber' | 'createdAt' | 'remainingBalance'>): CustomerOrder {
@@ -713,17 +780,7 @@ export class StorageService {
       return INITIAL_DAILY_SALES;
     }
     try {
-      const list: DailySale[] = JSON.parse(raw);
-      if (list.length < INITIAL_DAILY_SALES.length) {
-        const existingIds = new Set(list.map(s => s.id));
-        const missing = INITIAL_DAILY_SALES.filter(s => !existingIds.has(s.id));
-        if (missing.length > 0) {
-          const merged = [...list, ...missing];
-          this.saveDailySales(merged);
-          return merged;
-        }
-      }
-      return list;
+      return JSON.parse(raw);
     } catch {
       return INITIAL_DAILY_SALES;
     }
@@ -733,6 +790,31 @@ export class StorageService {
     localStorage.setItem(STORAGE_KEYS.DAILY_SALES, JSON.stringify(sales));
     this.recordLocalChange();
     window.dispatchEvent(new Event('sublistock_sales_updated'));
+    window.dispatchEvent(new Event('sublistock_daily_sales_updated'));
+  }
+
+  static deleteDailySale(saleId: string, restoreStock: boolean = true): void {
+    const sales = this.getDailySales();
+    const sale = sales.find(s => s.id === saleId);
+    if (!sale) return;
+
+    if (restoreStock && sale.items && sale.items.length > 0) {
+      const products = this.getProducts();
+      for (const item of sale.items) {
+        const prod = products.find(p => p.id === item.productId);
+        if (prod) {
+          prod.currentStock += item.quantity;
+        }
+      }
+      this.saveProducts(products);
+    }
+
+    const filtered = sales.filter(s => s.id !== saleId);
+    this.saveDailySales(filtered);
+
+    // Clean linked account movements if any
+    const movements = this.getAccountMovements().filter(m => m.referenceId !== saleId && m.referenceNumber !== sale.saleNumber);
+    this.saveAccountMovements(movements);
   }
 
   static addDailySale(sale: Omit<DailySale, 'id' | 'saleNumber' | 'date'>): DailySale {
@@ -859,18 +941,7 @@ export class StorageService {
       return INITIAL_QUOTATIONS;
     }
     try {
-      const list: Quotation[] = JSON.parse(raw);
-      // If list has older quotes without cost breakdown or missing new ones, merge or augment
-      if (list.length < INITIAL_QUOTATIONS.length) {
-        const existingIds = new Set(list.map(q => q.id));
-        const missing = INITIAL_QUOTATIONS.filter(q => !existingIds.has(q.id));
-        if (missing.length > 0) {
-          const merged = [...list, ...missing];
-          this.saveQuotations(merged);
-          return merged;
-        }
-      }
-      return list;
+      return JSON.parse(raw);
     } catch {
       return INITIAL_QUOTATIONS;
     }
@@ -922,14 +993,6 @@ export class StorageService {
     } else {
       try {
         list = JSON.parse(raw);
-        if (list.length < INITIAL_ACCOUNT_MOVEMENTS.length) {
-          const existingIds = new Set(list.map(m => m.id));
-          const missing = INITIAL_ACCOUNT_MOVEMENTS.filter(m => !existingIds.has(m.id));
-          if (missing.length > 0) {
-            list = [...list, ...missing];
-            this.saveAccountMovements(list);
-          }
-        }
       } catch {
         list = INITIAL_ACCOUNT_MOVEMENTS;
       }
@@ -1063,6 +1126,30 @@ export class StorageService {
     this.saveQuotations(INITIAL_QUOTATIONS);
     this.saveAccountMovements(INITIAL_ACCOUNT_MOVEMENTS);
     this.saveSettings(DEFAULT_SETTINGS);
+  }
+
+  static resetFictitiousDataToZero(preserveProducts: boolean = true): void {
+    if (!preserveProducts) {
+      this.saveProducts(INITIAL_PRODUCTS);
+    }
+    this.saveSuppliers([]);
+    this.saveCustomers([]);
+    this.saveCustomerOrders([]);
+    this.savePurchaseOrders([]);
+    this.saveDailySales([]);
+    this.saveQuotations([]);
+    this.saveAccountMovements([]);
+    localStorage.setItem('sublistock_zeroed_fictitious_v1', 'true');
+    this.recordLocalChange();
+    window.dispatchEvent(new Event('sublistock_reset_to_zero'));
+    window.dispatchEvent(new Event('sublistock_sales_updated'));
+    window.dispatchEvent(new Event('sublistock_daily_sales_updated'));
+    window.dispatchEvent(new Event('sublistock_orders_updated'));
+    window.dispatchEvent(new Event('sublistock_purchases_updated'));
+    window.dispatchEvent(new Event('sublistock_customers_updated'));
+    window.dispatchEvent(new Event('sublistock_suppliers_updated'));
+    window.dispatchEvent(new Event('sublistock_quotes_updated'));
+    window.dispatchEvent(new Event('sublistock_movements_updated'));
   }
 }
 

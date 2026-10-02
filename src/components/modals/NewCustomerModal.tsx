@@ -17,6 +17,7 @@ export const NewCustomerModal: React.FC<Props> = ({ isOpen, onClose, customerToE
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
+  const [status, setStatus] = useState<'activo' | 'inactivo'>('activo');
 
   useEffect(() => {
     if (customerToEdit) {
@@ -26,6 +27,7 @@ export const NewCustomerModal: React.FC<Props> = ({ isOpen, onClose, customerToE
       setEmail(customerToEdit.email);
       setAddress(customerToEdit.address || '');
       setNotes(customerToEdit.notes || '');
+      setStatus(customerToEdit.status || (customerToEdit.isActive === false ? 'inactivo' : 'activo'));
     } else {
       setName('');
       setBusinessOrContact('');
@@ -33,6 +35,7 @@ export const NewCustomerModal: React.FC<Props> = ({ isOpen, onClose, customerToE
       setEmail('');
       setAddress('');
       setNotes('');
+      setStatus('activo');
     }
   }, [customerToEdit, isOpen]);
 
@@ -53,7 +56,9 @@ export const NewCustomerModal: React.FC<Props> = ({ isOpen, onClose, customerToE
         phone: phone.trim() || 'Sin teléfono',
         email: email.trim() || 'sin_email@taller.com',
         address: address.trim() || undefined,
-        notes: notes.trim() || undefined
+        notes: notes.trim() || undefined,
+        status,
+        isActive: status === 'activo'
       });
     } else {
       StorageService.addCustomer({
@@ -63,7 +68,9 @@ export const NewCustomerModal: React.FC<Props> = ({ isOpen, onClose, customerToE
         email: email.trim() || 'sin_email@taller.com',
         address: address.trim() || undefined,
         currentBalance: 0,
-        notes: notes.trim() || undefined
+        notes: notes.trim() || undefined,
+        status,
+        isActive: status === 'activo'
       });
     }
 
@@ -170,6 +177,43 @@ export const NewCustomerModal: React.FC<Props> = ({ isOpen, onClose, customerToE
               placeholder="Preferencias de color, horarios de retiro, historial..."
               className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+              Estado del Cliente
+            </label>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setStatus('activo')}
+                className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${
+                  status === 'activo'
+                    ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-sm'
+                    : 'bg-slate-950 border-slate-700 text-slate-400 hover:text-white'
+                }`}
+              >
+                <span className={`w-2.5 h-2.5 rounded-full ${status === 'activo' ? 'bg-emerald-400' : 'bg-slate-600'}`}></span>
+                <span>Cliente Activo</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatus('inactivo')}
+                className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${
+                  status === 'inactivo'
+                    ? 'bg-amber-950/80 border-amber-500 text-amber-300 shadow-sm'
+                    : 'bg-slate-950 border-slate-700 text-slate-400 hover:text-white'
+                }`}
+              >
+                <span className={`w-2.5 h-2.5 rounded-full ${status === 'inactivo' ? 'bg-amber-400' : 'bg-slate-600'}`}></span>
+                <span>Inactivar Cliente</span>
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1">
+              {status === 'activo'
+                ? 'Habilitado para nuevos pedidos, ventas y presupuestos.'
+                : 'Pausado: Se conserva el historial y cuenta corriente pero se resalta como inactivo.'}
+            </p>
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-2">

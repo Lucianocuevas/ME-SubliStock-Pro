@@ -14,16 +14,24 @@ import {
   ArrowUpDown,
   BellOff,
   Bell,
-  Tag
+  Tag,
+  ScanLine,
+  Camera,
+  QrCode,
+  FileText,
+  CheckCircle2
 } from 'lucide-react';
 import { ProductItem, ProductCategory, MaterialType } from '../../types';
 import { StorageService, formatCurrency } from '../../services/storageService';
 import { ExportService } from '../../services/exportService';
 import { CATEGORY_LABELS, MATERIAL_LABELS } from '../../data/initialData';
+import { BarcodeScannerModal } from '../modals/BarcodeScannerModal';
+import { ProductQrModal } from '../modals/ProductQrModal';
 
 interface Props {
   products: ProductItem[];
   onOpenNewProduct: () => void;
+  onOpenNewProductWithSku?: (sku: string) => void;
   onEditProduct: (product: ProductItem) => void;
   onQuickRestock: (product: ProductItem) => void;
   onRefreshData: () => void;
@@ -33,6 +41,7 @@ interface Props {
 export const InventoryView: React.FC<Props> = ({
   products,
   onOpenNewProduct,
+  onOpenNewProductWithSku,
   onEditProduct,
   onQuickRestock,
   onRefreshData,
@@ -44,6 +53,8 @@ export const InventoryView: React.FC<Props> = ({
   const [stockFilter, setStockFilter] = useState<'all' | 'critical' | 'normal'>('all');
   const [sortField, setSortField] = useState<'stock' | 'name' | 'category'>('stock');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
+  const [selectedProductForQr, setSelectedProductForQr] = useState<ProductItem | null>(null);
 
   // Filtering logic
   const dismissedSet = useMemo(() => new Set(StorageService.getSettings().dismissedAlertProductIds || []), [products]);
@@ -97,6 +108,25 @@ export const InventoryView: React.FC<Props> = ({
     ExportService.exportStockToExcel(products);
   };
 
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [exportSuccessMessage, setExportSuccessMessage] = useState<string | null>(null);
+
+  const handleExportPdf = () => {
+    try {
+      setIsExportingPdf(true);
+      const settings = StorageService.getSettings();
+      // Export current filtered list or all products
+      const listToExport = filteredProducts.length > 0 ? filteredProducts : products;
+      ExportService.exportInventoryToPDF(listToExport, settings);
+      setExportSuccessMessage(`Reporte PDF generado exitosamente (${listToExport.length} insumos exportados).`);
+      setTimeout(() => setExportSuccessMessage(null), 4000);
+    } catch (err) {
+      console.error('Error generando PDF de inventario:', err);
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   // Summary Metrics
   const totalUnits = products.reduce((acc, p) => acc + p.currentStock, 0);
   const totalCostValue = products.reduce((acc, p) => acc + (p.currentStock * p.costPrice), 0);
@@ -105,6 +135,22 @@ export const InventoryView: React.FC<Props> = ({
 
   return (
     <div className="space-y-5">
+      {/* Export feedback toast */}
+      {exportSuccessMessage && (
+        <div className="p-3 bg-emerald-950/90 border border-emerald-600/80 rounded-xl text-xs font-bold text-emerald-200 flex items-center justify-between gap-2 shadow-lg animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{exportSuccessMessage}</span>
+          </div>
+          <button
+            onClick={() => setExportSuccessMessage(null)}
+            className="text-emerald-400 hover:text-white text-xs px-2 py-0.5 rounded hover:bg-emerald-900/50"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Top Banner & Action Controls */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -118,6 +164,15 @@ export const InventoryView: React.FC<Props> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => setIsBarcodeScannerOpen(true)}
+            className="px-3.5 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-950/50 transition-all cursor-pointer"
+            title="Escanear código de barras con la cámara del dispositivo para consultar y actualizar stock"
+          >
+            <ScanLine className="w-4 h-4" />
+            <span>Escanear Código (Cámara)</span>
+          </button>
+
           {onNavigateToLabels && (
             <button
               onClick={onNavigateToLabels}
@@ -130,8 +185,18 @@ export const InventoryView: React.FC<Props> = ({
           )}
 
           <button
+            onClick={handleExportPdf}
+            disabled={isExportingPdf}
+            className="px-3.5 py-2 bg-rose-950/60 hover:bg-rose-900/80 text-rose-200 border border-rose-700/60 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer disabled:opacity-50"
+            title="Exportar inventario actual a un reporte formal en PDF con membrete y valoración de stock"
+          >
+            <FileText className="w-4 h-4 text-rose-400" />
+            <span>{isExportingPdf ? 'Generando PDF...' : 'Reporte PDF'}</span>
+          </button>
+
+          <button
             onClick={handleExportExcel}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
             title="Exportar inventario actual a Microsoft Excel (.xlsx)"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
@@ -181,8 +246,16 @@ export const InventoryView: React.FC<Props> = ({
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               placeholder="Buscar por SKU, nombre, talle o color..."
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500"
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-9 py-2 text-xs text-white focus:outline-none focus:border-orange-500"
             />
+            <button
+              type="button"
+              onClick={() => setIsBarcodeScannerOpen(true)}
+              className="absolute right-2.5 top-2 text-slate-400 hover:text-orange-400 p-1 rounded transition-colors"
+              title="Escanear código de barras con la cámara"
+            >
+              <Camera className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           {/* Category filter */}
@@ -442,6 +515,14 @@ export const InventoryView: React.FC<Props> = ({
                           </button>
 
                           <button
+                            onClick={() => setSelectedProductForQr(product)}
+                            className="p-1 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded transition-colors"
+                            title="Ver Código QR & Código de Barras de este insumo"
+                          >
+                            <QrCode className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
                             onClick={() => onEditProduct(product)}
                             className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
                             title="Editar insumo"
@@ -466,6 +547,30 @@ export const InventoryView: React.FC<Props> = ({
           </table>
         </div>
       </div>
+
+      {/* Barcode Scanner with Camera Modal */}
+      <BarcodeScannerModal
+        isOpen={isBarcodeScannerOpen}
+        onClose={() => setIsBarcodeScannerOpen(false)}
+        products={products}
+        onProductUpdated={onRefreshData}
+        onSelectProductInInventory={(p) => setSearchTerm(p.sku)}
+        onCreateNewProductWithSku={(sku) => {
+          if (onOpenNewProductWithSku) {
+            onOpenNewProductWithSku(sku);
+          } else {
+            onOpenNewProduct();
+          }
+        }}
+      />
+
+      {/* Product QR & Barcode Detail Modal */}
+      <ProductQrModal
+        isOpen={!!selectedProductForQr}
+        onClose={() => setSelectedProductForQr(null)}
+        product={selectedProductForQr}
+        onPrintLabel={onNavigateToLabels ? () => onNavigateToLabels() : undefined}
+      />
     </div>
   );
 };

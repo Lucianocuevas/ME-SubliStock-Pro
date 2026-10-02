@@ -8,6 +8,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   productToEdit?: ProductItem | null;
+  initialSku?: string;
   suppliers: Supplier[];
   onProductSaved: () => void;
 }
@@ -16,6 +17,7 @@ export const NewProductModal: React.FC<Props> = ({
   isOpen,
   onClose,
   productToEdit,
+  initialSku,
   suppliers,
   onProductSaved
 }) => {
@@ -51,8 +53,8 @@ export const NewProductModal: React.FC<Props> = ({
       setLocation(productToEdit.location || '');
       setDescription(productToEdit.description || '');
     } else {
-      // Default auto SKU
-      setSku(`SUB-${Date.now().toString().slice(-4)}`);
+      // Default auto SKU or scanned SKU
+      setSku(initialSku || `SUB-${Date.now().toString().slice(-4)}`);
       setName('');
       setCategory('tazas');
       setMaterial('ceramica');
@@ -67,7 +69,7 @@ export const NewProductModal: React.FC<Props> = ({
       setLocation('Estante A-1');
       setDescription('');
     }
-  }, [productToEdit, isOpen, suppliers]);
+  }, [productToEdit, initialSku, isOpen, suppliers]);
 
   if (!isOpen) return null;
 

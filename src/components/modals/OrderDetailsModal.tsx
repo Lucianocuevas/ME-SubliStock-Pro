@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Calendar, DollarSign, Printer, CheckCircle2, Image as ImageIcon, ExternalLink } from 'lucide-react';
+import { X, Calendar, DollarSign, Printer, CheckCircle2, Image as ImageIcon, ExternalLink, Trash2 } from 'lucide-react';
 import { CustomerOrder, ProductionStatus } from '../../types';
 import { StorageService, formatCurrency, calculateOrderUrgency } from '../../services/storageService';
 import { STATUS_LABELS } from '../../data/initialData';
@@ -18,6 +18,7 @@ export const OrderDetailsModal: React.FC<Props> = ({ isOpen, onClose, order, onO
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [calendarSyncing, setCalendarSyncing] = useState(false);
   const [calendarMessage, setCalendarMessage] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   if (!isOpen || !order) return null;
 
@@ -313,16 +314,54 @@ export const OrderDetailsModal: React.FC<Props> = ({ isOpen, onClose, order, onO
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/70 flex items-center justify-between">
+        <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/70 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-xs text-slate-400">
             Total Trabajo: <strong className="text-white text-sm">{formatCurrency(order.totalAmount)}</strong> · Seña: <strong className="text-cyan-400">{formatCurrency(order.depositAmount)}</strong>
           </div>
-          <button
-            onClick={onClose}
-            className="px-5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition-colors"
-          >
-            Cerrar
-          </button>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            {!isDeleting ? (
+              <button
+                type="button"
+                onClick={() => setIsDeleting(true)}
+                className="px-3 py-2 bg-rose-950/50 hover:bg-rose-900 border border-rose-800/80 text-rose-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                title="Eliminar pedido permanentemente"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Eliminar</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 bg-rose-950/80 border border-rose-700 p-1 rounded-lg">
+                <span className="text-[11px] text-rose-200 px-1 font-semibold">¿Seguro?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    StorageService.deleteCustomerOrder(order.id, order.productionStatus !== 'entregado');
+                    setIsDeleting(false);
+                    onOrderUpdated();
+                    onClose();
+                  }}
+                  className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-xs font-bold transition-colors"
+                >
+                  Sí, Eliminar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsDeleting(false)}
+                  className="px-2 py-1 bg-slate-800 text-slate-300 rounded text-xs font-semibold"
+                >
+                  No
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={onClose}
+              className="px-5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition-colors"
+            >
+              Cerrar
+            </button>
+          </div>
         </div>
       </div>
 

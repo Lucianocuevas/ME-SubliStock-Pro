@@ -12,7 +12,6 @@ import {
   Shield,
   Database,
   CreditCard,
-  Github,
   Smartphone
 } from 'lucide-react';
 
@@ -24,6 +23,7 @@ interface Props {
   productsCount: number;
   quotationsCount?: number;
   debtorCustomersCount?: number;
+  showMultiDeviceTab?: boolean;
 }
 
 export const NavigationTabs: React.FC<Props> = ({
@@ -33,7 +33,8 @@ export const NavigationTabs: React.FC<Props> = ({
   activeOrdersCount,
   productsCount,
   quotationsCount = 0,
-  debtorCustomersCount = 0
+  debtorCustomersCount = 0,
+  showMultiDeviceTab = true
 }) => {
   const tabs = [
     {
@@ -88,20 +89,13 @@ export const NavigationTabs: React.FC<Props> = ({
       icon: Users,
       badge: null
     },
-    {
-      id: 'github_deploy',
-      label: 'Deploy en GitHub',
-      icon: Github,
-      badge: 'Pages',
-      badgeColor: 'bg-slate-800 text-cyan-300 border border-cyan-800/60'
-    },
-    {
+    ...(showMultiDeviceTab ? [{
       id: 'multi_device',
-      label: 'PC & Móvil (Android/iOS)',
+      label: 'PC & Móvil',
       icon: Smartphone,
-      badge: 'Nube',
+      badge: 'App Android/PC',
       badgeColor: 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-    },
+    }] : []),
     {
       id: 'users',
       label: 'Usuarios & Roles',

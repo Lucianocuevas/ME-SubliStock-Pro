@@ -29,12 +29,17 @@ import {
   CloudUpload,
   Database,
   Wifi,
-  WifiOff
+  WifiOff,
+  Smartphone,
+  Monitor,
+  BarChart3,
+  Layers
 } from 'lucide-react';
 import { StorageService, AppSettings, formatCurrency } from '../../services/storageService';
 import { FirestoreService } from '../../services/firestoreService';
 import { ProductLabelsTab } from './settings/ProductLabelsTab';
 import { CloudSyncModal } from '../modals/CloudSyncModal';
+import { WindowsExeModal } from '../modals/WindowsExeModal';
 
 interface Props {
   onRefreshData: () => void;
@@ -42,12 +47,42 @@ interface Props {
 
 export const SettingsView: React.FC<Props> = ({ onRefreshData }) => {
   const [settings, setSettings] = useState<AppSettings>(StorageService.getSettings());
-  const [activeTab, setActiveTab] = useState<'company' | 'labels' | 'alerts' | 'billing' | 'backup'>('company');
+  const [activeTab, setActiveTab] = useState<'company' | 'labels' | 'alerts' | 'billing' | 'backup' | 'preferences'>('company');
   const [isSaved, setIsSaved] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
   const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
+  const [isWindowsExeModalOpen, setIsWindowsExeModalOpen] = useState(false);
   const [isUploadingCloud, setIsUploadingCloud] = useState(false);
   const [pendingChanges, setPendingChanges] = useState(StorageService.getPendingChangesCount());
+
+  // Preferences
+  const [prefShowAndroidHeader, setPrefShowAndroidHeader] = useState(() => localStorage.getItem('sublistock_show_android_header') !== 'false');
+  const [prefShowMultiDeviceTab, setPrefShowMultiDeviceTab] = useState(() => localStorage.getItem('sublistock_show_multidevice_tab') !== 'false');
+  const [prefMinimizeBalanceChart, setPrefMinimizeBalanceChart] = useState(() => localStorage.getItem('sublistock_balance_chart_minimized') === 'true');
+
+  const handleToggleShowAndroidHeader = (show: boolean) => {
+    setPrefShowAndroidHeader(show);
+    localStorage.setItem('sublistock_show_android_header', String(show));
+    window.dispatchEvent(new Event('sublistock_prefs_updated'));
+    showNotification(show ? 'Acceso a App Android activado en la barra superior.' : 'Acceso a App Android ocultado de la barra principal.');
+    onRefreshData();
+  };
+
+  const handleToggleShowMultiDeviceTab = (show: boolean) => {
+    setPrefShowMultiDeviceTab(show);
+    localStorage.setItem('sublistock_show_multidevice_tab', String(show));
+    window.dispatchEvent(new Event('sublistock_prefs_updated'));
+    showNotification(show ? 'Pestaña PC & Móvil activada en el menú.' : 'Pestaña PC & Móvil ocultada de la navegación.');
+    onRefreshData();
+  };
+
+  const handleToggleMinimizeBalanceChart = (minimize: boolean) => {
+    setPrefMinimizeBalanceChart(minimize);
+    localStorage.setItem('sublistock_balance_chart_minimized', String(minimize));
+    window.dispatchEvent(new Event('sublistock_prefs_updated'));
+    showNotification(minimize ? 'Gráfico de balance configurado para iniciar minimizado.' : 'Gráfico de balance configurado para iniciar expandido.');
+    onRefreshData();
+  };
 
   const showNotification = (msg: string) => {
     setNotificationMsg(msg);
@@ -155,12 +190,21 @@ export const SettingsView: React.FC<Props> = ({ onRefreshData }) => {
     reader.readAsText(file);
   };
 
-  const handleResetDemo = () => {
-    if (confirm('¿Restaurar los datos de demostración iniciales? Esto cargará los ejemplos de tazas, remeras, insumos y configuración inicial.')) {
-      StorageService.resetToDemoData();
+  const handleZeroFictitiousData = () => {
+    if (confirm('¿Poner a 0 todas las ventas, pedidos, presupuestos y datos ficticios? Tus productos e insumos se conservarán intactos.')) {
+      StorageService.resetFictitiousDataToZero(true);
       setSettings(StorageService.getSettings());
       onRefreshData();
-      alert('Datos de demostración restablecidos correctamente.');
+      showNotification('Datos ficticios restablecidos a 0. Tus productos se conservaron intactos.');
+    }
+  };
+
+  const handleResetDemo = () => {
+    if (confirm('¿Restablecer el sistema a valores iniciales limpios?')) {
+      StorageService.resetFictitiousDataToZero(true);
+      setSettings(StorageService.getSettings());
+      onRefreshData();
+      showNotification('Sistema restablecido correctamente conservando tus productos.');
     }
   };
 
@@ -278,6 +322,18 @@ export const SettingsView: React.FC<Props> = ({ onRefreshData }) => {
               {pendingChanges}
             </span>
           )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('preferences')}
+          className={`px-4 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'preferences'
+              ? 'bg-slate-800 text-white border border-slate-700 shadow-sm'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+          }`}
+        >
+          <Eye className="w-4 h-4 text-indigo-400" />
+          <span>Preferencias de Pantalla & Desktop</span>
         </button>
       </div>
 
@@ -1001,6 +1057,144 @@ export const SettingsView: React.FC<Props> = ({ onRefreshData }) => {
           />
         </div>
       )}
+
+      {/* TAB 6: PREFERENCIAS DE PANTALLA & DESKTOP */}
+      {activeTab === 'preferences' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Card 1: Accesos en la Interfaz */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 space-y-5 shadow-sm">
+            <div className="flex items-center gap-2.5 pb-3 border-b border-slate-800">
+              <Eye className="w-5 h-5 text-indigo-400" />
+              <div>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                  Visibilidad de Accesos en Barra Principal & Menú
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Personaliza los accesos directos visibles para adaptar el sistema a tu flujo de trabajo
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Option 1: Botón App Android en la cabecera */}
+              <div className="flex items-center justify-between p-4 bg-slate-950 rounded-xl border border-slate-800/90 gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-bold text-white">
+                      Acceso a App Android en la Barra Superior
+                    </span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${prefShowAndroidHeader ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-slate-800 text-slate-400'}`}>
+                      {prefShowAndroidHeader ? 'Visible' : 'Oculto'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Muestra u oculta el botón verde de "App Android" situado en la barra superior junto al buscador y estado de la nube.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleShowAndroidHeader(!prefShowAndroidHeader)}
+                  className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors shrink-0 cursor-pointer ${
+                    prefShowAndroidHeader ? 'bg-emerald-600 justify-end' : 'bg-slate-700 justify-start'
+                  }`}
+                >
+                  <div className="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform" />
+                </button>
+              </div>
+
+              {/* Option 2: Pestaña PC & Móvil */}
+              <div className="flex items-center justify-between p-4 bg-slate-950 rounded-xl border border-slate-800/90 gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-cyan-400" />
+                    <span className="text-xs font-bold text-white">
+                      Pestaña "PC & Móvil (Android/iOS)" en la Barra de Navegación
+                    </span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${prefShowMultiDeviceTab ? 'bg-cyan-950 text-cyan-300 border border-cyan-800' : 'bg-slate-800 text-slate-400'}`}>
+                      {prefShowMultiDeviceTab ? 'Visible' : 'Oculta'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Controla si la pestaña para vincular teléfonos con código QR se visualiza en la fila principal de pestañas.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleShowMultiDeviceTab(!prefShowMultiDeviceTab)}
+                  className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors shrink-0 cursor-pointer ${
+                    prefShowMultiDeviceTab ? 'bg-cyan-600 justify-end' : 'bg-slate-700 justify-start'
+                  }`}
+                >
+                  <div className="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform" />
+                </button>
+              </div>
+
+              {/* Option 3: Gráfico de Balance Minimizado */}
+              <div className="flex items-center justify-between p-4 bg-slate-950 rounded-xl border border-slate-800/90 gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-bold text-white">
+                      Minimizar Gráfico de Balance por Defecto
+                    </span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${prefMinimizeBalanceChart ? 'bg-amber-950 text-amber-300 border border-amber-800' : 'bg-slate-800 text-slate-400'}`}>
+                      {prefMinimizeBalanceChart ? 'Minimizado' : 'Expandido'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Oculta las curvas del gráfico de balance en el Panel de Inicio para ganar espacio y ver de inmediato los pedidos urgentes. Puedes expandirlo cuando lo necesites.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleMinimizeBalanceChart(!prefMinimizeBalanceChart)}
+                  className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors shrink-0 cursor-pointer ${
+                    prefMinimizeBalanceChart ? 'bg-amber-600 justify-end' : 'bg-slate-700 justify-start'
+                  }`}
+                >
+                  <div className="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Aplicación para Windows Desktop (.EXE) */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <Monitor className="w-5 h-5 text-cyan-400" />
+                <div>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                    Aplicación de Escritorio para Windows (.EXE)
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Descarga el ejecutable nativo para tu computadora o crea un acceso directo de escritorio
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWindowsExeModalOpen(true)}
+                className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-md shadow-cyan-950/50 transition-all cursor-pointer"
+              >
+                <Monitor className="w-4 h-4" />
+                <span>Abrir Centro de Descarga Windows (.EXE)</span>
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Puedes ejecutar SubliStock Pro directamente en tu PC de Windows sin necesidad de abrir el navegador web. Dispones del compilador nativo para generar <strong className="text-cyan-300 font-mono">SubliStockPro.exe</strong>, el lanzador directo <strong className="text-white font-mono">SubliStockPro.bat</strong> y la instalación PWA integrada con la barra de tareas.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Windows EXE Desktop Modal */}
+      <WindowsExeModal
+        isOpen={isWindowsExeModalOpen}
+        onClose={() => setIsWindowsExeModalOpen(false)}
+      />
     </div>
   );
 };

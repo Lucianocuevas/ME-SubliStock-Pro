@@ -46,6 +46,7 @@ export const QuotationsView: React.FC<Props> = ({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [expandedCostQuoteId, setExpandedCostQuoteId] = useState<string | null>(null);
+  const [quoteToDelete, setQuoteToDelete] = useState<Quotation | null>(null);
 
   const filtered = quotations.filter(q => {
     const matchesSearch =
@@ -60,9 +61,10 @@ export const QuotationsView: React.FC<Props> = ({
     onQuotationsUpdated();
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('¿Estás seguro de eliminar este presupuesto?')) {
-      StorageService.deleteQuotation(id);
+  const confirmDeleteQuote = () => {
+    if (quoteToDelete) {
+      StorageService.deleteQuotation(quoteToDelete.id);
+      setQuoteToDelete(null);
       onQuotationsUpdated();
     }
   };
@@ -290,7 +292,7 @@ export const QuotationsView: React.FC<Props> = ({
                     </select>
 
                     <button
-                      onClick={() => handleDelete(q.id)}
+                      onClick={() => setQuoteToDelete(q)}
                       className="p-1.5 text-slate-500 hover:text-rose-400 rounded hover:bg-slate-800 transition-colors"
                       title="Eliminar presupuesto"
                     >
@@ -441,6 +443,44 @@ export const QuotationsView: React.FC<Props> = ({
           })
         )}
       </div>
+
+      {/* Delete Quote Confirmation Modal */}
+      {quoteToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="w-10 h-10 rounded-lg bg-rose-950/60 border border-rose-800/80 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-base">¿Eliminar Presupuesto?</h3>
+                <p className="text-xs text-slate-400 font-mono">{quoteToDelete.quoteNumber} · {quoteToDelete.customerName}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              ¿Confirmas que deseas eliminar este presupuesto por valor de <strong className="text-white">{formatCurrency(quoteToDelete.totalAmount)}</strong>? Esta acción no se puede deshacer.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setQuoteToDelete(null)}
+                className="px-4 py-2 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteQuote}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors shadow-lg shadow-rose-950/50"
+              >
+                Sí, Eliminar Presupuesto
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import QRCode from 'qrcode';
 import {
   Cloud,
   CloudUpload,
@@ -18,7 +19,10 @@ import {
   Activity,
   Calendar,
   Layers,
-  Sparkles
+  Sparkles,
+  QrCode,
+  Copy,
+  Check
 } from 'lucide-react';
 import { FirestoreService, FirestoreSyncInfo } from '../../services/firestoreService';
 import { StorageService } from '../../services/storageService';
@@ -44,6 +48,55 @@ export const CloudSyncModal: React.FC<Props> = ({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [localSummary, setLocalSummary] = useState(StorageService.getLocalDatabaseSummary());
+  const [mobileQrDataUrl, setMobileQrDataUrl] = useState<string>('');
+  const [showMobileQr, setShowMobileQr] = useState<boolean>(false);
+  const [copiedMobileUrl, setCopiedMobileUrl] = useState<boolean>(false);
+
+  // Generate QR code for mobile connection whenever modal is opened
+  useEffect(() => {
+    if (!isOpen || typeof window === 'undefined') return;
+    const currentUrl = `${window.location.origin}${window.location.pathname}`;
+    QRCode.toDataURL(currentUrl, {
+      width: 280,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: {
+        dark: '#000000',
+        light: '#ffffff'
+      }
+    })
+      .then(url => setMobileQrDataUrl(url))
+      .catch(err => console.error('Error generando QR de celular:', err));
+  }, [isOpen]);
+
+  // Upload Local Data to Cloud
+  const handleUpload = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setErrorMessage('Sin conexión a internet. Los datos están 100% resguardados en tu base de datos local.');
+      setTimeout(() => setErrorMessage(null), 4000);
+      return;
+    }
+
+    setIsUploading(true);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+
+    try {
+      const res = await FirestoreService.uploadAllToCloud();
+      if (res.success) {
+        setSuccessMessage('¡Datos subidos exitosamente a la nube de Firestore!');
+        setLocalSummary(StorageService.getLocalDatabaseSummary());
+        if (onDataRefreshed) onDataRefreshed();
+      } else {
+        setErrorMessage(res.error || 'Ocurrió un error al subir los datos.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Error al conectar con la nube.');
+    } finally {
+      setIsUploading(false);
+      setTimeout(() => setSuccessMessage(null), 4000);
+    }
+  }, [onDataRefreshed]);
 
   // Listen to network status
   useEffect(() => {
@@ -76,17 +129,15 @@ export const CloudSyncModal: React.FC<Props> = ({
       window.removeEventListener('sublistock_firestore_sync_updated', handleSyncUpdate);
       window.removeEventListener('sublistock_pending_changes_updated', handleSyncUpdate);
     };
-  }, [syncInfo.autoSyncEnabled]);
+  }, [syncInfo.autoSyncEnabled, handleUpload]);
 
   useEffect(() => {
     if (isOpen) {
       setSyncInfo(FirestoreService.getSyncInfo());
       setLocalSummary(StorageService.getLocalDatabaseSummary());
-      setIsOnline(navigator.onLine);
+      setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
     }
   }, [isOpen]);
-
-  if (!isOpen) return null;
 
   // Test Cloud Connection
   const handleTestConnection = async () => {
@@ -99,35 +150,6 @@ export const CloudSyncModal: React.FC<Props> = ({
       setTestResult({ connected: false, latencyMs: 0, error: e?.message || 'Error de conexión' });
     } finally {
       setIsTesting(false);
-    }
-  };
-
-  // Upload Local Data to Cloud
-  const handleUpload = async () => {
-    if (!isOnline) {
-      setErrorMessage('Sin conexión a internet. Los datos están 100% resguardados en tu base de datos local.');
-      setTimeout(() => setErrorMessage(null), 4000);
-      return;
-    }
-
-    setIsUploading(true);
-    setSuccessMessage(null);
-    setErrorMessage(null);
-
-    try {
-      const res = await FirestoreService.uploadAllToCloud();
-      if (res.success) {
-        setSuccessMessage('¡Datos subidos exitosamente a la nube de Firestore!');
-        setLocalSummary(StorageService.getLocalDatabaseSummary());
-        if (onDataRefreshed) onDataRefreshed();
-      } else {
-        setErrorMessage(res.error || 'Ocurrió un error al subir los datos.');
-      }
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'Error al conectar con la nube.');
-    } finally {
-      setIsUploading(false);
-      setTimeout(() => setSuccessMessage(null), 4000);
     }
   };
 
@@ -211,6 +233,8 @@ export const CloudSyncModal: React.FC<Props> = ({
       })
     : 'Aún no sincronizado';
 
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col">
@@ -267,7 +291,7 @@ export const CloudSyncModal: React.FC<Props> = ({
         {/* Modal Content */}
         <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
           {/* Status Banner */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Card 1: Local DB Status */}
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1.5">
               <div className="flex items-center justify-between text-xs text-slate-400 font-semibold">
@@ -329,7 +353,94 @@ export const CloudSyncModal: React.FC<Props> = ({
                 Último respaldo en la nube de Google Firebase.
               </p>
             </div>
+
+            {/* Card 4: Mobile Access QR */}
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1.5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between text-xs text-slate-400 font-semibold">
+                  <span className="flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-cyan-400" /> Acceso Celular
+                  </span>
+                  <span className="text-[10px] text-cyan-400 font-bold bg-cyan-950 px-1.5 py-0.5 rounded border border-cyan-800">
+                    QR Móvil
+                  </span>
+                </div>
+                <div className="text-xs font-bold text-white pt-1">
+                  Abrir en Teléfono
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Escanea para sincronizar y usar en vivo.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowMobileQr(!showMobileQr)}
+                className="w-full mt-2 py-1 px-2 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-800/80 text-cyan-300 rounded text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span>{showMobileQr ? 'Ocultar QR' : 'Ver Código QR'}</span>
+              </button>
+            </div>
           </div>
+
+          {/* EXPANDABLE MOBILE QR CODE BOX */}
+          {showMobileQr && (
+            <div className="bg-slate-950 p-5 rounded-2xl border-2 border-cyan-500/40 shadow-xl flex flex-col md:flex-row items-center gap-5 animate-in fade-in">
+              <div className="p-3 bg-white rounded-xl shadow-lg border border-slate-700 shrink-0">
+                {mobileQrDataUrl ? (
+                  <img
+                    src={mobileQrDataUrl}
+                    alt="Código QR para abrir en celular"
+                    className="w-40 h-40 block"
+                  />
+                ) : (
+                  <div className="w-40 h-40 flex items-center justify-center text-slate-500">
+                    <QrCode className="w-10 h-10 animate-pulse text-cyan-600" />
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3 flex-1 text-center md:text-left">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center justify-center md:justify-start gap-2">
+                    <Smartphone className="w-4 h-4 text-cyan-400" />
+                    <span>Conectar Celular o Tablet al Taller</span>
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                    Apunta la cámara de tu smartphone a este código QR para abrir el sistema. Toda la información registrada en tu celular se sincronizará automáticamente con tu computadora mediante Firestore.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 justify-center md:justify-start">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const currentUrl = `${window.location.origin}${window.location.pathname}`;
+                      navigator.clipboard.writeText(currentUrl);
+                      setCopiedMobileUrl(true);
+                      setTimeout(() => setCopiedMobileUrl(false), 2000);
+                    }}
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  >
+                    {copiedMobileUrl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedMobileUrl ? '¡Enlace copiado!' : 'Copiar Enlace'}</span>
+                  </button>
+
+                  {mobileQrDataUrl && (
+                    <a
+                      href={mobileQrDataUrl}
+                      download="sublistock-qr-acceso.png"
+                      className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Descargar QR (PNG)</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* MAIN ACTIONS: UPLOAD & DOWNLOAD BUTTONS */}
           <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">

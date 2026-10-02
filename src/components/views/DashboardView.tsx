@@ -21,7 +21,14 @@ import {
   Filter,
   Activity,
   BellOff,
-  CreditCard
+  CreditCard,
+  Minimize2,
+  Maximize2,
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+  Search,
+  X
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -68,6 +75,28 @@ export const DashboardView: React.FC<Props> = ({
   const [chartTimeframe, setChartTimeframe] = useState<'year' | 'last30days' | 'last12weeks'>('year');
   const [includeProductionOrders, setIncludeProductionOrders] = useState(true);
   const [showNetBalance, setShowNetBalance] = useState(true);
+  const [isBalanceChartMinimized, setIsBalanceChartMinimized] = useState<boolean>(() => {
+    return localStorage.getItem('sublistock_balance_chart_minimized') === 'true';
+  });
+
+  const toggleBalanceChartMinimized = () => {
+    setIsBalanceChartMinimized(prev => {
+      const next = !prev;
+      localStorage.setItem('sublistock_balance_chart_minimized', String(next));
+      return next;
+    });
+  };
+
+  const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
+  const [saleToDelete, setSaleToDelete] = useState<DailySale | null>(null);
+  const [salesSearchTerm, setSalesSearchTerm] = useState('');
+
+  const confirmDeleteSale = () => {
+    if (saleToDelete) {
+      StorageService.deleteDailySale(saleToDelete.id, true);
+      setSaleToDelete(null);
+    }
+  };
 
   React.useEffect(() => {
     const timer = setInterval(() => setLiveClock(new Date()), 1000);
@@ -612,6 +641,32 @@ export const DashboardView: React.FC<Props> = ({
               <span className={`w-2 h-2 rounded-full ${showNetBalance ? 'bg-cyan-400' : 'bg-slate-600'}`} />
               <span>Línea Balance</span>
             </button>
+
+            {/* Toggle: Minimize / Expand Balance Chart */}
+            <button
+              type="button"
+              onClick={toggleBalanceChartMinimized}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ${
+                isBalanceChartMinimized
+                  ? 'bg-emerald-950/80 hover:bg-emerald-900 border-emerald-600/80 text-emerald-300 ring-1 ring-emerald-500/40'
+                  : 'bg-slate-950 hover:bg-slate-800 border-slate-700/80 text-slate-300 hover:text-white'
+              }`}
+              title={isBalanceChartMinimized ? "Expandir gráfico de balance comparativo" : "Minimizar solo el gráfico de balance"}
+            >
+              {isBalanceChartMinimized ? (
+                <>
+                  <Maximize2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Expandir Gráfico</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-emerald-400" />
+                </>
+              ) : (
+                <>
+                  <Minimize2 className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Minimizar Gráfico</span>
+                  <ChevronUp className="w-3.5 h-3.5 text-cyan-400" />
+                </>
+              )}
+            </button>
           </div>
         </div>
 
@@ -685,93 +740,122 @@ export const DashboardView: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* The Recharts Responsive Container */}
-        <div className="w-full h-80 pt-2">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={chartData}
-              margin={{ top: 10, right: 20, left: 10, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.35} vertical={false} />
-              <XAxis
-                dataKey="label"
-                stroke="#64748b"
-                fontSize={11}
-                tickLine={false}
-                axisLine={{ stroke: '#334155' }}
-              />
-              <YAxis
-                stroke="#64748b"
-                fontSize={11}
-                tickLine={false}
-                axisLine={{ stroke: '#334155' }}
-                tickFormatter={(val: number) => {
-                  if (val === 0) return '$0';
-                  if (Math.abs(val) >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
-                  if (Math.abs(val) >= 1000) return `$${(val / 1000).toFixed(0)}k`;
-                  return `$${val}`;
-                }}
-              />
-              <Tooltip content={<CustomChartTooltip />} />
-              <Legend
-                verticalAlign="top"
-                align="right"
-                wrapperStyle={{ paddingBottom: '12px', fontSize: '12px' }}
-                iconType="circle"
-              />
-              {/* Line 1: Ventas */}
-              <Line
-                type="monotone"
-                dataKey="ventas"
-                name="Ventas Realizadas ($)"
-                stroke="#10b981"
-                strokeWidth={3}
-                dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#0f172a' }}
-                activeDot={{ r: 7, stroke: '#34d399', strokeWidth: 2, fill: '#10b981' }}
-              />
-              {/* Line 2: Compras */}
-              <Line
-                type="monotone"
-                dataKey="compras"
-                name="Compras a Proveedores ($)"
-                stroke="#f97316"
-                strokeWidth={3}
-                dot={{ r: 4, fill: '#f97316', strokeWidth: 2, stroke: '#0f172a' }}
-                activeDot={{ r: 7, stroke: '#fb923c', strokeWidth: 2, fill: '#f97316' }}
-              />
-              {/* Optional Line 3: Net Balance */}
-              {showNetBalance && (
-                <Line
-                  type="monotone"
-                  dataKey="balance"
-                  name="Balance Operativo Neto ($)"
-                  stroke="#06b6d4"
-                  strokeWidth={2}
-                  strokeDasharray="4 4"
-                  dot={{ r: 3, fill: '#06b6d4', strokeWidth: 1, stroke: '#0f172a' }}
-                  activeDot={{ r: 6, stroke: '#22d3ee', strokeWidth: 2, fill: '#06b6d4' }}
-                />
-              )}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Footer info note */}
-        <div className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-400">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Datos calculados en tiempo real desde el registro de ventas de mostrador y compras cargadas.</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span>{chartData.length} períodos visualizados</span>
+        {/* Recharts Responsive Container or Minimized State */}
+        {isBalanceChartMinimized ? (
+          <div className="p-4 bg-slate-950/70 border border-dashed border-slate-800 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                <BarChart3 className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="font-semibold text-slate-200">
+                  Gráfico de Balance Comparativo Minimizado
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  El gráfico visual se encuentra minimizado para optimizar el espacio de trabajo. Las 4 tarjetas de métricas continúan actualizadas en tiempo real.
+                </p>
+              </div>
+            </div>
             <button
-              onClick={() => onNavigateTab('reports')}
-              className="text-cyan-400 hover:underline font-semibold"
+              type="button"
+              onClick={toggleBalanceChartMinimized}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shrink-0 transition-colors shadow-sm cursor-pointer"
             >
-              Exportar reporte contable &rarr;
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span>Ver Gráfico Completo</span>
             </button>
           </div>
-        </div>
+        ) : (
+          <>
+            {/* The Recharts Responsive Container */}
+            <div className="w-full h-80 pt-2 animate-in fade-in duration-300">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={chartData}
+                  margin={{ top: 10, right: 20, left: 10, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.35} vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    stroke="#64748b"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={{ stroke: '#334155' }}
+                  />
+                  <YAxis
+                    stroke="#64748b"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={{ stroke: '#334155' }}
+                    tickFormatter={(val: number) => {
+                      if (val === 0) return '$0';
+                      if (Math.abs(val) >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
+                      if (Math.abs(val) >= 1000) return `$${(val / 1000).toFixed(0)}k`;
+                      return `$${val}`;
+                    }}
+                  />
+                  <Tooltip content={<CustomChartTooltip />} />
+                  <Legend
+                    verticalAlign="top"
+                    align="right"
+                    wrapperStyle={{ paddingBottom: '12px', fontSize: '12px' }}
+                    iconType="circle"
+                  />
+                  {/* Line 1: Ventas */}
+                  <Line
+                    type="monotone"
+                    dataKey="ventas"
+                    name="Ventas Realizadas ($)"
+                    stroke="#10b981"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#0f172a' }}
+                    activeDot={{ r: 7, stroke: '#34d399', strokeWidth: 2, fill: '#10b981' }}
+                  />
+                  {/* Line 2: Compras */}
+                  <Line
+                    type="monotone"
+                    dataKey="compras"
+                    name="Compras a Proveedores ($)"
+                    stroke="#f97316"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#f97316', strokeWidth: 2, stroke: '#0f172a' }}
+                    activeDot={{ r: 7, stroke: '#fb923c', strokeWidth: 2, fill: '#f97316' }}
+                  />
+                  {/* Optional Line 3: Net Balance */}
+                  {showNetBalance && (
+                    <Line
+                      type="monotone"
+                      dataKey="balance"
+                      name="Balance Operativo Neto ($)"
+                      stroke="#06b6d4"
+                      strokeWidth={2}
+                      strokeDasharray="4 4"
+                      dot={{ r: 3, fill: '#06b6d4', strokeWidth: 1, stroke: '#0f172a' }}
+                      activeDot={{ r: 6, stroke: '#22d3ee', strokeWidth: 2, fill: '#06b6d4' }}
+                    />
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Footer info note */}
+            <div className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-400">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Datos calculados en tiempo real desde el registro de ventas de mostrador y compras cargadas.</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span>{chartData.length} períodos visualizados</span>
+                <button
+                  onClick={() => onNavigateTab('reports')}
+                  className="text-cyan-400 hover:underline font-semibold"
+                >
+                  Exportar reporte contable &rarr;
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Main Grid: Urgent Deliveries + Quick Sales */}
@@ -892,22 +976,42 @@ export const DashboardView: React.FC<Props> = ({
                     </p>
                   </div>
 
-                  <div className="text-right shrink-0">
-                    <span className="font-bold text-white text-sm">{formatCurrency(sale.totalAmount)}</span>
-                    <span className="text-[10px] text-emerald-400 block font-medium">
-                      +{formatCurrency(sale.totalAmount - sale.totalCost)}
-                    </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="text-right">
+                      <span className="font-bold text-white text-sm">{formatCurrency(sale.totalAmount)}</span>
+                      <span className="text-[10px] text-emerald-400 block font-medium">
+                        +{formatCurrency(sale.totalAmount - sale.totalCost)}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setSaleToDelete(sale)}
+                      className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors"
+                      title="Eliminar venta y restaurar stock"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-lg flex items-center justify-between text-xs">
-            <span className="text-slate-400">Total acumulado en mostrador:</span>
-            <strong className="text-white text-sm">
-              {formatCurrency(dailySales.reduce((a, b) => a + b.totalAmount, 0))}
-            </strong>
+          <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div>
+              <span className="text-slate-400">Total acumulado en mostrador: </span>
+              <strong className="text-white text-sm font-bold">
+                {formatCurrency(dailySales.reduce((a, b) => a + b.totalAmount, 0))}
+              </strong>
+            </div>
+            {dailySales.length > 0 && (
+              <button
+                onClick={() => setIsSalesModalOpen(true)}
+                className="text-cyan-400 hover:text-cyan-300 font-bold text-xs hover:underline flex items-center gap-1 self-end sm:self-auto"
+              >
+                <span>Ver historial completo ({dailySales.length} ventas)</span>
+                <span>&rarr;</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -963,6 +1067,157 @@ export const DashboardView: React.FC<Props> = ({
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Full Sales History Modal */}
+      {isSalesModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-950 border border-emerald-800 flex items-center justify-center text-emerald-400">
+                  <ShoppingBag className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Historial Completo de Ventas de Mostrador</h3>
+                  <p className="text-xs text-slate-400">{dailySales.length} ventas registradas · Total: {formatCurrency(dailySales.reduce((a, b) => a + b.totalAmount, 0))}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsSalesModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Search filter in modal */}
+            <div className="p-4 border-b border-slate-800 bg-slate-950/40">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  value={salesSearchTerm}
+                  onChange={e => setSalesSearchTerm(e.target.value)}
+                  placeholder="Buscar por N° comprobante, cliente o producto..."
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+            </div>
+
+            {/* Sales Table / List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+              {dailySales
+                .filter(s =>
+                  s.saleNumber.toLowerCase().includes(salesSearchTerm.toLowerCase()) ||
+                  s.customerName.toLowerCase().includes(salesSearchTerm.toLowerCase()) ||
+                  s.items.some(i => i.productName.toLowerCase().includes(salesSearchTerm.toLowerCase()))
+                )
+                .map(sale => (
+                  <div
+                    key={sale.id}
+                    className="p-3.5 bg-slate-950/70 border border-slate-800 hover:border-slate-700 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-colors"
+                  >
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono font-bold text-white text-sm">{sale.saleNumber}</span>
+                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                          {sale.paymentMethod}
+                        </span>
+                        <span className="text-slate-500 font-mono text-[11px]">
+                          {new Date(sale.date).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+                        </span>
+                      </div>
+                      <p className="font-semibold text-slate-200">{sale.customerName}</p>
+                      <div className="text-[11px] text-slate-400 flex flex-wrap gap-1.5">
+                        {sale.items.map((i, idx) => (
+                          <span key={idx} className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                            <strong className="text-cyan-400">{i.quantity}x</strong> {i.productName} ({formatCurrency(i.totalPrice)})
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
+                      <div className="text-right">
+                        <span className="font-bold text-white text-base">{formatCurrency(sale.totalAmount)}</span>
+                        <span className="text-[10px] text-emerald-400 block font-semibold">
+                          Ganancia: +{formatCurrency(sale.totalAmount - sale.totalCost)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => setSaleToDelete(sale)}
+                        className="p-2 bg-slate-900 hover:bg-rose-950 text-slate-400 hover:text-rose-400 border border-slate-800 hover:border-rose-800 rounded-lg transition-colors"
+                        title="Eliminar esta venta y restaurar insumos al stock"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+
+            <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between">
+              <span className="text-xs text-slate-400">
+                Al eliminar una venta, los insumos se reingresan automáticamente al stock del inventario.
+              </span>
+              <button
+                onClick={() => setIsSalesModalOpen(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Sale Confirmation Modal */}
+      {saleToDelete && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="w-10 h-10 rounded-lg bg-rose-950/60 border border-rose-800/80 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-base">¿Eliminar Venta?</h3>
+                <p className="text-xs text-slate-400 font-mono">{saleToDelete.saleNumber} · {saleToDelete.customerName}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              ¿Confirmas que deseas eliminar esta venta por valor de <strong className="text-white">{formatCurrency(saleToDelete.totalAmount)}</strong>?
+              Se restaurarán automáticamente las cantidades de los insumos al stock del inventario.
+            </p>
+
+            <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 text-xs space-y-1">
+              <span className="text-slate-400 block font-semibold">Ítems que reingresarán a inventario:</span>
+              {saleToDelete.items.map((i, idx) => (
+                <div key={idx} className="text-emerald-400 font-mono">
+                  +{i.quantity}x {i.productName}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setSaleToDelete(null)}
+                className="px-4 py-2 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteSale}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors shadow-lg shadow-rose-950/50"
+              >
+                Sí, Eliminar y Restaurar Stock
+              </button>
+            </div>
           </div>
         </div>
       )}
