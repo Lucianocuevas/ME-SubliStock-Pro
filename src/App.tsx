@@ -129,6 +129,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // Zero out old fictitious records on mount if not done yet, keeping products intact
+    if (localStorage.getItem('sublistock_zeroed_fictitious_v1') !== 'true') {
+      StorageService.resetFictitiousDataToZero(true);
+    }
+
     loadData();
 
     // Listen to reactive update events
@@ -137,6 +142,7 @@ export default function App() {
     window.addEventListener('sublistock_orders_updated', handleUpdate);
     window.addEventListener('sublistock_purchases_updated', handleUpdate);
     window.addEventListener('sublistock_sales_updated', handleUpdate);
+    window.addEventListener('sublistock_daily_sales_updated', handleUpdate);
     window.addEventListener('sublistock_customers_updated', handleUpdate);
     window.addEventListener('sublistock_suppliers_updated', handleUpdate);
     window.addEventListener('sublistock_settings_updated', handleUpdate);
@@ -144,6 +150,7 @@ export default function App() {
     window.addEventListener('sublistock_movements_updated', handleUpdate);
     window.addEventListener('sublistock_users_updated', handleUpdate);
     window.addEventListener('sublistock_auth_changed', handleUpdate);
+    window.addEventListener('sublistock_reset_to_zero', handleUpdate);
 
     const handlePrefs = () => {
       setShowAndroidAccess(localStorage.getItem('sublistock_show_android_header') !== 'false');
@@ -165,6 +172,7 @@ export default function App() {
       window.removeEventListener('sublistock_orders_updated', handleUpdate);
       window.removeEventListener('sublistock_purchases_updated', handleUpdate);
       window.removeEventListener('sublistock_sales_updated', handleUpdate);
+      window.removeEventListener('sublistock_daily_sales_updated', handleUpdate);
       window.removeEventListener('sublistock_customers_updated', handleUpdate);
       window.removeEventListener('sublistock_suppliers_updated', handleUpdate);
       window.removeEventListener('sublistock_settings_updated', handleUpdate);
@@ -172,6 +180,7 @@ export default function App() {
       window.removeEventListener('sublistock_movements_updated', handleUpdate);
       window.removeEventListener('sublistock_users_updated', handleUpdate);
       window.removeEventListener('sublistock_auth_changed', handleUpdate);
+      window.removeEventListener('sublistock_reset_to_zero', handleUpdate);
       window.removeEventListener('sublistock_prefs_updated', handlePrefs);
       if (unsubscribeCloud) unsubscribeCloud();
     };
@@ -327,6 +336,7 @@ export default function App() {
               StorageService.updateOrderStatus(orderId, status);
               loadData();
             }}
+            onOrderDeleted={loadData}
           />
         )}
 
@@ -387,6 +397,7 @@ export default function App() {
               setPaymentEntityId(customerId);
               setIsPaymentModalOpen(true);
             }}
+            onCustomerUpdated={loadData}
           />
         )}
 

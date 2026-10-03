@@ -300,6 +300,7 @@ export interface AccountMovement {
   type: AccountMovementType;
   concept: string;
   referenceNumber?: string; // N° de Recibo, N° de Pedido, Transferencia, Cheque
+  referenceId?: string;     // ID del pedido, venta o compra vinculada
   debit: number;            // Debe (+ deuda del cliente / - deuda con proveedor)
   credit: number;           // Haber (- deuda del cliente / + deuda con proveedor)
   balanceAfter: number;     // Saldo resultante histórico

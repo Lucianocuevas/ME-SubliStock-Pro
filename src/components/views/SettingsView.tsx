@@ -1033,15 +1033,26 @@ export const SettingsView: React.FC<Props> = ({ onRefreshData }) => {
                 />
               </label>
 
+              {/* Poner datos ficticios a 0 conservando productos */}
+              <button
+                type="button"
+                onClick={handleZeroFictitiousData}
+                className="p-4 bg-amber-950/20 hover:bg-amber-950/40 border border-amber-800/60 hover:border-amber-600 rounded-xl text-xs font-semibold text-amber-300 flex flex-col items-center justify-center gap-2 transition-colors text-center"
+              >
+                <RotateCcw className="w-6 h-6 text-amber-400" />
+                <span className="font-bold">Poner datos ficticios a 0</span>
+                <span className="text-[10px] text-amber-400/80">Conserva todos los productos</span>
+              </button>
+
               {/* Reset Demo Data */}
               <button
                 type="button"
                 onClick={handleResetDemo}
-                className="p-4 bg-slate-950 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-800 rounded-xl text-xs font-semibold text-slate-300 hover:text-rose-300 flex flex-col items-center justify-center gap-2 transition-colors"
+                className="p-4 bg-slate-950 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-800 rounded-xl text-xs font-semibold text-slate-300 hover:text-rose-300 flex flex-col items-center justify-center gap-2 transition-colors text-center"
               >
                 <RotateCcw className="w-6 h-6 text-rose-400" />
-                <span>Restablecer Catálogo Demo</span>
-                <span className="text-[10px] text-slate-500">Reiniciar ejemplos iniciales</span>
+                <span>Restablecer Todo a Cero</span>
+                <span className="text-[10px] text-slate-500">Limpieza completa</span>
               </button>
             </div>
           </div>

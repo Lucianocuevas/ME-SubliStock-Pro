@@ -29,7 +29,8 @@ export const OrdersProductionView: React.FC<Props> = ({
   orders,
   onOpenNewOrder,
   onSelectOrder,
-  onUpdateOrderStatus
+  onUpdateOrderStatus,
+  onOrderDeleted
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
