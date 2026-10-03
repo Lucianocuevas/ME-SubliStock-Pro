@@ -17,7 +17,14 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  Sparkles
+  Sparkles,
+  Key,
+  Lock,
+  Eye,
+  EyeOff,
+  Terminal,
+  HelpCircle,
+  Check
 } from 'lucide-react';
 import { StorageService } from '../../services/storageService';
 import { MySQLGeneratorService } from '../../services/mysqlGeneratorService';
@@ -45,6 +52,54 @@ export const BackendCloudView: React.FC<Props> = ({
   const [activeTab, setActiveTab] = useState<'cloud' | 'mysql' | 'springboot' | 'mobile'>('cloud');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [syncInfo, setSyncInfo] = useState<FirestoreSyncInfo>(FirestoreService.getSyncInfo());
+
+  // Local MySQL Connection Settings
+  const [dbConfig, setDbConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sublistock_mysql_config');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      host: 'localhost',
+      port: '3306',
+      database: 'sublistock_db',
+      user: 'root',
+      password: ''
+    };
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [configFormatTab, setConfigFormatTab] = useState<'env' | 'spring' | 'cli'>('env');
+
+  const handleUpdateDbConfig = (key: string, value: string) => {
+    setDbConfig((prev: typeof dbConfig) => {
+      const updated = { ...prev, [key]: value };
+      localStorage.setItem('sublistock_mysql_config', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleDownloadEnvFile = () => {
+    const envContent = `# ========================================================
+# Configuración de Base de Datos MySQL para SubliStock Pro
+# Coloca este archivo .env en la raíz de tu proyecto o backend
+# ========================================================
+DB_HOST=${dbConfig.host || 'localhost'}
+DB_PORT=${dbConfig.port || '3306'}
+DB_NAME=${dbConfig.database || 'sublistock_db'}
+DB_USER=${dbConfig.user || 'root'}
+DB_PASSWORD=${dbConfig.password || ''}
+
+# Cadena de conexión directa URL
+DATABASE_URL=mysql://${dbConfig.user || 'root'}:${encodeURIComponent(dbConfig.password || '')}@${dbConfig.host || 'localhost'}:${dbConfig.port || '3306'}/${dbConfig.database || 'sublistock_db'}
+`;
+    const blob = new Blob([envContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '.env';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   // Listen to Firestore synchronization events and trigger auto-sync if appropriate
   useEffect(() => {
@@ -459,7 +514,296 @@ export const BackendCloudView: React.FC<Props> = ({
 
       {/* Tab: MySQL */}
       {activeTab === 'mysql' && (
-        <div className="space-y-4">
+        <div className="space-y-5">
+          {/* Card: MySQL Local Connection Assistant */}
+          <div className="bg-gradient-to-br from-slate-900 via-indigo-950/30 to-slate-900 border border-indigo-800/60 rounded-xl p-5 sm:p-6 space-y-5 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0 shadow-inner">
+                  <Database className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>Asistente de Conexión a Base de Datos MySQL Local</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-indigo-950 text-indigo-300 border border-indigo-800">
+                      Localhost & Servidor
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Configura tus credenciales y descarga los archivos listos para vincular tu MySQL local (XAMPP, WAMP, Workbench o Docker).
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={handleDownloadEnvFile}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-950/60 transition-colors"
+                  title="Descargar archivo de configuración .env con los datos completados"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Descargar .env</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Answer: ¿Qué necesitas aparte del usuario y contraseña? */}
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                <HelpCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>¿Qué necesitas aparte del usuario y la contraseña?</span>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Para conectar cualquier base MySQL necesitas <strong className="text-white">5 parámetros exactos</strong>:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-xs">
+                <div className="bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[11px]">1. Servidor / Host</span>
+                  <strong className="text-white font-mono text-xs">localhost</strong> o <strong className="text-white font-mono text-xs">127.0.0.1</strong>
+                </div>
+                <div className="bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[11px]">2. Puerto de Conexión</span>
+                  <strong className="text-white font-mono text-xs">3306</strong> <span className="text-slate-500 text-[10px]">(puerto estándar)</span>
+                </div>
+                <div className="bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[11px]">3. Nombre de la Base</span>
+                  <strong className="text-white font-mono text-xs">sublistock_db</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Interactive Credentials Inputs */}
+            <div className="space-y-3">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
+                Completa tus datos locales para generar los archivos y cadenas de conexión:
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                {/* Host */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-400 block">Host / Servidor</label>
+                  <input
+                    type="text"
+                    value={dbConfig.host}
+                    onChange={e => handleUpdateDbConfig('host', e.target.value)}
+                    placeholder="localhost"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                  />
+                  <span className="text-[10px] text-slate-500 block">Por ej: localhost o 127.0.0.1</span>
+                </div>
+
+                {/* Port */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-400 block">Puerto</label>
+                  <input
+                    type="text"
+                    value={dbConfig.port}
+                    onChange={e => handleUpdateDbConfig('port', e.target.value)}
+                    placeholder="3306"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                  />
+                  <span className="text-[10px] text-slate-500 block">Por defecto: 3306</span>
+                </div>
+
+                {/* Database Name */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-400 block">Base de Datos</label>
+                  <input
+                    type="text"
+                    value={dbConfig.database}
+                    onChange={e => handleUpdateDbConfig('database', e.target.value)}
+                    placeholder="sublistock_db"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                  />
+                  <span className="text-[10px] text-slate-500 block">Nombre de tu base</span>
+                </div>
+
+                {/* User */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-400 block">Usuario (User)</label>
+                  <input
+                    type="text"
+                    value={dbConfig.user}
+                    onChange={e => handleUpdateDbConfig('user', e.target.value)}
+                    placeholder="root"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                  />
+                  <span className="text-[10px] text-slate-500 block">En XAMPP suele ser root</span>
+                </div>
+
+                {/* Password */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-400 block">Contraseña (Password)</label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={dbConfig.password}
+                      onChange={e => handleUpdateDbConfig('password', e.target.value)}
+                      placeholder="vacía o tu clave"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-3 pr-8 py-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2 top-2 text-slate-400 hover:text-white"
+                      title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                    >
+                      {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block">En XAMPP por defecto es vacía</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Formatted Output Viewer Tabs */}
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="text-xs font-bold text-slate-300">
+                  ¿Dónde pones estos datos? Elige según tu tecnología:
+                </span>
+
+                <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setConfigFormatTab('env')}
+                    className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
+                      configFormatTab === 'env' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    1. Archivo .env (Node.js)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfigFormatTab('spring')}
+                    className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
+                      configFormatTab === 'spring' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    2. application.properties (Java)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfigFormatTab('cli')}
+                    className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
+                      configFormatTab === 'cli' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    3. Consola MySQL / XAMPP
+                  </button>
+                </div>
+              </div>
+
+              {/* View 1: .env */}
+              {configFormatTab === 'env' && (
+                <div className="bg-slate-950 rounded-xl border border-slate-800 p-4 space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-mono text-emerald-400 font-bold">.env (Carpeta raíz del proyecto o backend)</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(`DB_HOST=${dbConfig.host || 'localhost'}
+DB_PORT=${dbConfig.port || '3306'}
+DB_NAME=${dbConfig.database || 'sublistock_db'}
+DB_USER=${dbConfig.user || 'root'}
+DB_PASSWORD=${dbConfig.password || ''}
+DATABASE_URL=mysql://${dbConfig.user || 'root'}:${encodeURIComponent(dbConfig.password || '')}@${dbConfig.host || 'localhost'}:${dbConfig.port || '3306'}/${dbConfig.database || 'sublistock_db'}`, 'env')}
+                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-medium flex items-center gap-1 transition-colors"
+                      >
+                        <Copy className="w-3 h-3" />
+                        <span>{copiedKey === 'env' ? '¡Copiado!' : 'Copiar'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDownloadEnvFile}
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>Descargar .env</span>
+                      </button>
+                    </div>
+                  </div>
+                  <pre className="text-xs font-mono text-slate-300 bg-slate-900 p-3 rounded-lg overflow-x-auto leading-relaxed border border-slate-800/80">
+{`# Coloca este archivo con el nombre exacto: .env
+DB_HOST=${dbConfig.host || 'localhost'}
+DB_PORT=${dbConfig.port || '3306'}
+DB_NAME=${dbConfig.database || 'sublistock_db'}
+DB_USER=${dbConfig.user || 'root'}
+DB_PASSWORD=${dbConfig.password || ''}
+
+# Cadena de conexión completa
+DATABASE_URL=mysql://${dbConfig.user || 'root'}:${encodeURIComponent(dbConfig.password || '')}@${dbConfig.host || 'localhost'}:${dbConfig.port || '3306'}/${dbConfig.database || 'sublistock_db'}`}
+                  </pre>
+                  <p className="text-[11px] text-slate-400">
+                    <strong className="text-slate-300">¿Dónde se coloca?</strong> Crea un archivo de texto llamado <code className="text-emerald-400 font-mono">.env</code> en la carpeta raíz de tu aplicación y pega este contenido. Las bibliotecas como <code className="text-cyan-400 font-mono">dotenv</code> lo leen automáticamente.
+                  </p>
+                </div>
+              )}
+
+              {/* View 2: Spring Boot properties */}
+              {configFormatTab === 'spring' && (
+                <div className="bg-slate-950 rounded-xl border border-slate-800 p-4 space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-mono text-amber-400 font-bold">src/main/resources/application.properties</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(`spring.datasource.url=jdbc:mysql://${dbConfig.host || 'localhost'}:${dbConfig.port || '3306'}/${dbConfig.database || 'sublistock_db'}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+spring.datasource.username=${dbConfig.user || 'root'}
+spring.datasource.password=${dbConfig.password || ''}
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true`, 'springprops')}
+                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-medium flex items-center gap-1 transition-colors"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>{copiedKey === 'springprops' ? '¡Copiado!' : 'Copiar'}</span>
+                    </button>
+                  </div>
+                  <pre className="text-xs font-mono text-slate-300 bg-slate-900 p-3 rounded-lg overflow-x-auto leading-relaxed border border-slate-800/80">
+{`spring.datasource.url=jdbc:mysql://${dbConfig.host || 'localhost'}:${dbConfig.port || '3306'}/${dbConfig.database || 'sublistock_db'}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+spring.datasource.username=${dbConfig.user || 'root'}
+spring.datasource.password=${dbConfig.password || ''}
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true`}
+                  </pre>
+                  <p className="text-[11px] text-slate-400">
+                    <strong className="text-slate-300">¿Dónde se coloca?</strong> Si usas Java Spring Boot, pégalo en <code className="text-amber-400 font-mono">src/main/resources/application.properties</code>. Spring Boot se conectará a tu MySQL al iniciar.
+                  </p>
+                </div>
+              )}
+
+              {/* View 3: Terminal CLI */}
+              {configFormatTab === 'cli' && (
+                <div className="bg-slate-950 rounded-xl border border-slate-800 p-4 space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-mono text-cyan-400 font-bold">Comandos de Consola / Terminal MySQL</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(`mysql -u ${dbConfig.user || 'root'} ${dbConfig.password ? `-p'${dbConfig.password}'` : '-p'} -h ${dbConfig.host || 'localhost'} -P ${dbConfig.port || '3306'} -e "CREATE DATABASE IF NOT EXISTS ${dbConfig.database || 'sublistock_db'} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"`, 'cli_cmd')}
+                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-medium flex items-center gap-1 transition-colors"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>{copiedKey === 'cli_cmd' ? '¡Copiado!' : 'Copiar Comando'}</span>
+                    </button>
+                  </div>
+                  <pre className="text-xs font-mono text-cyan-300 bg-slate-900 p-3 rounded-lg overflow-x-auto leading-relaxed border border-slate-800/80">
+{`# 1. Crear la base de datos en tu MySQL local:
+mysql -u ${dbConfig.user || 'root'} -p -h ${dbConfig.host || 'localhost'} -P ${dbConfig.port || '3306'} -e "CREATE DATABASE IF NOT EXISTS \`${dbConfig.database || 'sublistock_db'}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+# 2. Cargar todas las 8 tablas e insumos con el archivo SQL descargado:
+mysql -u ${dbConfig.user || 'root'} -p -h ${dbConfig.host || 'localhost'} ${dbConfig.database || 'sublistock_db'} < sublistock_mysql_schema_dump.sql`}
+                  </pre>
+                  <p className="text-[11px] text-slate-400">
+                    <strong className="text-slate-300">En phpMyAdmin (XAMPP):</strong> También puedes entrar a <code className="text-white font-mono">http://localhost/phpmyadmin</code>, crear la base <code className="text-white font-mono">{dbConfig.database || 'sublistock_db'}</code>, ir a la solapa <strong className="text-white">Importar</strong> y seleccionar el archivo <code className="text-white font-mono">.sql</code> descargado abajo.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* DDL & Inserts Script Card */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
             <div className="flex items-center justify-between">
               <div>
@@ -474,7 +818,7 @@ export const BackendCloudView: React.FC<Props> = ({
 
               <button
                 onClick={handleDownloadMySQL}
-                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow"
               >
                 <Download className="w-4 h-4" />
                 <span>Descargar .sql</span>
