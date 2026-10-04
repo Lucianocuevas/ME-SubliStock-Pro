@@ -13,7 +13,9 @@ import {
   AccountMovementType,
   PaymentMethodType,
   ProductLabelSettings,
-  LabelPreset
+  LabelPreset,
+  CategoryDefinition,
+  MaterialDefinition
 } from '../types';
 import {
   INITIAL_PRODUCTS,
@@ -24,8 +26,13 @@ import {
   INITIAL_DAILY_SALES,
   INITIAL_USERS,
   INITIAL_QUOTATIONS,
-  INITIAL_ACCOUNT_MOVEMENTS
+  INITIAL_ACCOUNT_MOVEMENTS,
+  INITIAL_CATEGORIES,
+  INITIAL_MATERIALS,
+  CATEGORY_LABELS,
+  MATERIAL_LABELS
 } from '../data/initialData';
+import { ImageCompressionService } from './imageCompressionService';
 
 const STORAGE_KEYS = {
   PRODUCTS: 'sublistock_products_v1',
@@ -159,6 +166,8 @@ export interface AppSettings {
   enableStockAlerts?: boolean;
   dismissedAlertProductIds?: string[];
   labelSettings?: ProductLabelSettings;
+  customCategories?: CategoryDefinition[];
+  customMaterials?: MaterialDefinition[];
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -180,7 +189,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   instagram: '@sublistudio.ok',
   enableStockAlerts: true,
   dismissedAlertProductIds: [],
-  labelSettings: DEFAULT_LABEL_SETTINGS
+  labelSettings: DEFAULT_LABEL_SETTINGS,
+  customCategories: [],
+  customMaterials: []
 };
 
 export class StorageService {
@@ -231,17 +242,114 @@ export class StorageService {
     };
   }
 
+  // CATEGORIES & MATERIALS CATALOG
+  static getCategories(): CategoryDefinition[] {
+    const settings = this.getSettings();
+    const custom = settings.customCategories || [];
+    const map = new Map<string, CategoryDefinition>();
+    INITIAL_CATEGORIES.forEach(cat => map.set(cat.id, cat));
+    custom.forEach(cat => map.set(cat.id, { ...cat, isCustom: true }));
+    return Array.from(map.values());
+  }
+
+  static getMaterials(): MaterialDefinition[] {
+    const settings = this.getSettings();
+    const custom = settings.customMaterials || [];
+    const map = new Map<string, MaterialDefinition>();
+    INITIAL_MATERIALS.forEach(mat => map.set(mat.id, mat));
+    custom.forEach(mat => map.set(mat.id, { ...mat, isCustom: true }));
+    return Array.from(map.values());
+  }
+
+  static getCategoryLabel(categoryId?: string): string {
+    if (!categoryId) return '';
+    const categories = this.getCategories();
+    const found = categories.find(c => c.id.toLowerCase() === categoryId.toLowerCase());
+    if (found) return found.label;
+    if (CATEGORY_LABELS[categoryId]?.label) return CATEGORY_LABELS[categoryId].label;
+    return categoryId;
+  }
+
+  static getMaterialLabel(materialId?: string): string {
+    if (!materialId) return '';
+    const materials = this.getMaterials();
+    const found = materials.find(m => m.id.toLowerCase() === materialId.toLowerCase());
+    if (found) return found.label;
+    if (MATERIAL_LABELS[materialId]) return MATERIAL_LABELS[materialId];
+    return materialId;
+  }
+
+  static addCustomCategory(label: string, description?: string, icon?: string): CategoryDefinition {
+    const trimmed = label.trim();
+    if (!trimmed) throw new Error('El nombre del rubro no puede estar vacío');
+    const slug = 'cat_' + trimmed.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '_');
+    const id = slug || `cat_${Date.now()}`;
+    const newCat: CategoryDefinition = {
+      id,
+      label: trimmed,
+      description: description?.trim() || undefined,
+      icon: icon || 'Tag',
+      isCustom: true
+    };
+    const settings = this.getSettings();
+    const custom = [...(settings.customCategories || [])];
+    const existingIndex = custom.findIndex(c => c.id === id || c.label.toLowerCase() === trimmed.toLowerCase());
+    if (existingIndex >= 0) {
+      custom[existingIndex] = { ...custom[existingIndex], label: trimmed, description: description?.trim() || custom[existingIndex].description };
+    } else {
+      custom.push(newCat);
+    }
+    this.saveSettings({ ...settings, customCategories: custom });
+    window.dispatchEvent(new Event('sublistock_catalog_updated'));
+    return newCat;
+  }
+
+  static addCustomMaterial(label: string, description?: string): MaterialDefinition {
+    const trimmed = label.trim();
+    if (!trimmed) throw new Error('El nombre del material no puede estar vacío');
+    const slug = 'mat_' + trimmed.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '_');
+    const id = slug || `mat_${Date.now()}`;
+    const newMat: MaterialDefinition = {
+      id,
+      label: trimmed,
+      description: description?.trim() || undefined,
+      isCustom: true
+    };
+    const settings = this.getSettings();
+    const custom = [...(settings.customMaterials || [])];
+    const existingIndex = custom.findIndex(m => m.id === id || m.label.toLowerCase() === trimmed.toLowerCase());
+    if (existingIndex >= 0) {
+      custom[existingIndex] = { ...custom[existingIndex], label: trimmed, description: description?.trim() || custom[existingIndex].description };
+    } else {
+      custom.push(newMat);
+    }
+    this.saveSettings({ ...settings, customMaterials: custom });
+    window.dispatchEvent(new Event('sublistock_catalog_updated'));
+    return newMat;
+  }
+
+  static deleteCustomCategory(categoryId: string): void {
+    const settings = this.getSettings();
+    const custom = (settings.customCategories || []).filter(c => c.id !== categoryId);
+    this.saveSettings({ ...settings, customCategories: custom });
+    window.dispatchEvent(new Event('sublistock_catalog_updated'));
+  }
+
+  static deleteCustomMaterial(materialId: string): void {
+    const settings = this.getSettings();
+    const custom = (settings.customMaterials || []).filter(m => m.id !== materialId);
+    this.saveSettings({ ...settings, customMaterials: custom });
+    window.dispatchEvent(new Event('sublistock_catalog_updated'));
+  }
+
   // PRODUCTS
   static getProducts(): ProductItem[] {
     const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-    if (!raw) {
-      this.saveProducts(INITIAL_PRODUCTS);
-      return INITIAL_PRODUCTS;
-    }
+    if (!raw) return [];
     try {
       return JSON.parse(raw);
     } catch {
-      return INITIAL_PRODUCTS;
+      return [];
     }
   }
 
@@ -423,14 +531,11 @@ export class StorageService {
   // SUPPLIERS
   static getSuppliers(): Supplier[] {
     const raw = localStorage.getItem(STORAGE_KEYS.SUPPLIERS);
-    if (!raw) {
-      this.saveSuppliers(INITIAL_SUPPLIERS);
-      return INITIAL_SUPPLIERS;
-    }
+    if (!raw) return [];
     try {
       return JSON.parse(raw);
     } catch {
-      return INITIAL_SUPPLIERS;
+      return [];
     }
   }
 
@@ -469,14 +574,11 @@ export class StorageService {
   // PURCHASE ORDERS (COMPRAS A PROVEEDORES)
   static getPurchaseOrders(): PurchaseOrder[] {
     const raw = localStorage.getItem(STORAGE_KEYS.PURCHASES);
-    if (!raw) {
-      this.savePurchaseOrders(INITIAL_PURCHASES);
-      return INITIAL_PURCHASES;
-    }
+    if (!raw) return [];
     try {
       return JSON.parse(raw);
     } catch {
-      return INITIAL_PURCHASES;
+      return [];
     }
   }
 
@@ -540,14 +642,11 @@ export class StorageService {
   // CUSTOMERS
   static getCustomers(): Customer[] {
     const raw = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
-    if (!raw) {
-      this.saveCustomers(INITIAL_CUSTOMERS);
-      return INITIAL_CUSTOMERS;
-    }
+    if (!raw) return [];
     try {
       return JSON.parse(raw);
     } catch {
-      return INITIAL_CUSTOMERS;
+      return [];
     }
   }
 
@@ -599,14 +698,11 @@ export class StorageService {
   // CUSTOMER ORDERS (PEDIDOS CON PRODUCCIÓN Y FECHAS DE ENTREGA)
   static getCustomerOrders(): CustomerOrder[] {
     const raw = localStorage.getItem(STORAGE_KEYS.ORDERS);
-    if (!raw) {
-      this.saveCustomerOrders(INITIAL_ORDERS);
-      return INITIAL_ORDERS;
-    }
+    if (!raw) return [];
     try {
       return JSON.parse(raw);
     } catch {
-      return INITIAL_ORDERS;
+      return [];
     }
   }
 
@@ -775,14 +871,11 @@ export class StorageService {
   // DAILY SALES (VENTAS DIARIAS DE MOSTRADOR)
   static getDailySales(): DailySale[] {
     const raw = localStorage.getItem(STORAGE_KEYS.DAILY_SALES);
-    if (!raw) {
-      this.saveDailySales(INITIAL_DAILY_SALES);
-      return INITIAL_DAILY_SALES;
-    }
+    if (!raw) return [];
     try {
       return JSON.parse(raw);
     } catch {
-      return INITIAL_DAILY_SALES;
+      return [];
     }
   }
 
@@ -857,6 +950,18 @@ export class StorageService {
       if (labelSettings.marginRightMm === undefined) labelSettings.marginRightMm = labelSettings.marginLeftMm;
       if (labelSettings.marginBottomMm === undefined) labelSettings.marginBottomMm = labelSettings.marginTopMm;
 
+      // Auto-compress oversized logo in background if exceeding 120 KB
+      if (parsed.logoUrl && typeof parsed.logoUrl === 'string' && parsed.logoUrl.length > 120_000) {
+        ImageCompressionService.compressImageBase64(parsed.logoUrl, 380, 0.82)
+          .then((optimized: string) => {
+            if (optimized.length < parsed.logoUrl.length) {
+              parsed.logoUrl = optimized;
+              localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify({ ...DEFAULT_SETTINGS, ...parsed, labelSettings }));
+            }
+          })
+          .catch(() => {});
+      }
+
       return {
         ...DEFAULT_SETTINGS,
         ...parsed,
@@ -881,7 +986,9 @@ export class StorageService {
       return INITIAL_USERS;
     }
     try {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      const clean = Array.isArray(parsed) ? parsed.filter(u => u.email === 'lucianocuevasmehauod@gmail.com' || u.id === 'user-01') : [];
+      return clean.length > 0 ? clean : INITIAL_USERS;
     } catch {
       return INITIAL_USERS;
     }
@@ -936,14 +1043,11 @@ export class StorageService {
   // QUOTATIONS (PRESUPUESTOS MEMBRETADOS)
   static getQuotations(): Quotation[] {
     const raw = localStorage.getItem(STORAGE_KEYS.QUOTATIONS);
-    if (!raw) {
-      this.saveQuotations(INITIAL_QUOTATIONS);
-      return INITIAL_QUOTATIONS;
-    }
+    if (!raw) return [];
     try {
       return JSON.parse(raw);
     } catch {
-      return INITIAL_QUOTATIONS;
+      return [];
     }
   }
 
@@ -987,14 +1091,11 @@ export class StorageService {
   static getAccountMovements(filter?: { entityType?: 'customer' | 'supplier'; entityId?: string }): AccountMovement[] {
     const raw = localStorage.getItem(STORAGE_KEYS.ACCOUNT_MOVEMENTS);
     let list: AccountMovement[] = [];
-    if (!raw) {
-      this.saveAccountMovements(INITIAL_ACCOUNT_MOVEMENTS);
-      list = INITIAL_ACCOUNT_MOVEMENTS;
-    } else {
+    if (raw) {
       try {
         list = JSON.parse(raw);
       } catch {
-        list = INITIAL_ACCOUNT_MOVEMENTS;
+        list = [];
       }
     }
 
@@ -1008,6 +1109,99 @@ export class StorageService {
     }
 
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
+  // CLEAN ANY RESIDUAL FICTITIOUS DATA FROM LOCAL STORAGE
+  static cleanFictitiousLocalData(): void {
+    try {
+      const mockProductIds = new Set([
+        'prod-cin-01', 'prod-gor-01', 'prod-gor-02', 'prod-lla-01', 'prod-lla-02',
+        'prod-pap-01', 'prod-pla-01', 'prod-pla-02', 'prod-rem-alg-neg-l',
+        'prod-rem-modal-m', 'prod-rem-spum-l', 'prod-rem-spum-m', 'prod-rem-spum-xl',
+        'prod-taz-01', 'prod-taz-02', 'prod-taz-03', 'prod-tin-01', 'prod-vin-01', 'prod-vin-02'
+      ]);
+      const mockSuppliers = new Set(['sup-01', 'sup-02', 'sup-03']);
+      const mockCustomers = new Set(['cust-01', 'cust-02', 'cust-03', 'cust-04', 'cust-05', 'cus-01', 'cus-02', 'cus-03']);
+      const mockOrders = new Set(['ord-100', 'ord-101', 'ord-102', 'ord-103', 'ord-104']);
+
+      const rawProds = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+      if (rawProds) {
+        try {
+          const prods: ProductItem[] = JSON.parse(rawProds);
+          const cleanProds = prods.filter(p => !mockProductIds.has(p.id));
+          localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(cleanProds));
+        } catch {}
+      }
+
+      const rawSups = localStorage.getItem(STORAGE_KEYS.SUPPLIERS);
+      if (rawSups) {
+        try {
+          const sups: Supplier[] = JSON.parse(rawSups);
+          const cleanSups = sups.filter(s => !mockSuppliers.has(s.id));
+          localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(cleanSups));
+        } catch {}
+      }
+
+      const rawCusts = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
+      if (rawCusts) {
+        try {
+          const custs: Customer[] = JSON.parse(rawCusts);
+          const cleanCusts = custs.filter(c => !mockCustomers.has(c.id));
+          localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(cleanCusts));
+        } catch {}
+      }
+
+      const rawOrds = localStorage.getItem(STORAGE_KEYS.ORDERS);
+      if (rawOrds) {
+        try {
+          const ords: CustomerOrder[] = JSON.parse(rawOrds);
+          const cleanOrds = ords.filter(o => !mockOrders.has(o.id));
+          localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(cleanOrds));
+        } catch {}
+      }
+
+      const rawPurs = localStorage.getItem(STORAGE_KEYS.PURCHASES);
+      if (rawPurs) {
+        try {
+          const purs: PurchaseOrder[] = JSON.parse(rawPurs);
+          const cleanPurs = purs.filter(p => !p.id.startsWith('pur-hist') && !p.id.startsWith('pur-20'));
+          localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify(cleanPurs));
+        } catch {}
+      }
+
+      const rawSales = localStorage.getItem(STORAGE_KEYS.DAILY_SALES);
+      if (rawSales) {
+        try {
+          const sales: DailySale[] = JSON.parse(rawSales);
+          const cleanSales = sales.filter(s => !s.id.startsWith('sale-hist') && !s.id.startsWith('sale-00'));
+          localStorage.setItem(STORAGE_KEYS.DAILY_SALES, JSON.stringify(cleanSales));
+        } catch {}
+      }
+
+      const rawQuotes = localStorage.getItem(STORAGE_KEYS.QUOTATIONS);
+      if (rawQuotes) {
+        try {
+          const quotes: Quotation[] = JSON.parse(rawQuotes);
+          const cleanQuotes = quotes.filter(q => q.id !== 'quote-01' && q.id !== 'quote-02');
+          localStorage.setItem(STORAGE_KEYS.QUOTATIONS, JSON.stringify(cleanQuotes));
+        } catch {}
+      }
+
+      const rawMovs = localStorage.getItem(STORAGE_KEYS.ACCOUNT_MOVEMENTS);
+      if (rawMovs) {
+        try {
+          const movs: AccountMovement[] = JSON.parse(rawMovs);
+          const cleanMovs = movs.filter(m => !m.id.startsWith('mov-'));
+          localStorage.setItem(STORAGE_KEYS.ACCOUNT_MOVEMENTS, JSON.stringify(cleanMovs));
+        } catch {}
+      }
+
+      const users = this.getUsers().filter(u => u.email === 'lucianocuevasmehauod@gmail.com' || u.id === 'user-01');
+      if (users.length === 0) users.push(INITIAL_USERS[0]);
+      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    } catch (e) {
+      console.warn('Error cleaning fictitious local data:', e);
+    }
   }
 
   static saveAccountMovements(movements: AccountMovement[]): void {
@@ -1128,9 +1322,9 @@ export class StorageService {
     this.saveSettings(DEFAULT_SETTINGS);
   }
 
-  static resetFictitiousDataToZero(preserveProducts: boolean = true): void {
+  static resetFictitiousDataToZero(preserveProducts: boolean = false): void {
     if (!preserveProducts) {
-      this.saveProducts(INITIAL_PRODUCTS);
+      this.saveProducts([]);
     }
     this.saveSuppliers([]);
     this.saveCustomers([]);
@@ -1142,6 +1336,7 @@ export class StorageService {
     localStorage.setItem('sublistock_zeroed_fictitious_v1', 'true');
     this.recordLocalChange();
     window.dispatchEvent(new Event('sublistock_reset_to_zero'));
+    window.dispatchEvent(new Event('sublistock_products_updated'));
     window.dispatchEvent(new Event('sublistock_sales_updated'));
     window.dispatchEvent(new Event('sublistock_daily_sales_updated'));
     window.dispatchEvent(new Event('sublistock_orders_updated'));

@@ -357,8 +357,8 @@ export const AlertsView: React.FC<Props> = ({
                         </div>
 
                         <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-                          <span>Rubro: <strong className="text-slate-200">{CATEGORY_LABELS[product.category]?.label || product.category}</strong></span>
-                          <span>Material: <strong className="text-cyan-300">{MATERIAL_LABELS[product.material] || product.material}</strong></span>
+                          <span>Rubro: <strong className="text-slate-200">{StorageService.getCategoryLabel(product.category)}</strong></span>
+                          <span>Material: <strong className="text-cyan-300">{StorageService.getMaterialLabel(product.material)}</strong></span>
                           {product.size && <span>Talle/Tamaño: <strong className="text-slate-200">{product.size}</strong></span>}
                           {product.color && <span>Color: <strong className="text-slate-200">{product.color}</strong></span>}
                         </div>

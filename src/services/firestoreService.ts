@@ -3,6 +3,7 @@ import {
   getFirestore,
   doc,
   setDoc,
+  deleteDoc,
   writeBatch,
   getDoc,
   collection,
@@ -23,6 +24,7 @@ import {
   AccountMovement
 } from '../types';
 import { StorageService, AppSettings } from './storageService';
+import { ImageCompressionService } from './imageCompressionService';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
@@ -188,9 +190,41 @@ export class FirestoreService {
       await this.batchSyncCollection('quotations', quotations);
       await this.batchSyncCollection('account_movements', accountMovements);
 
-      // 2. Settings document
+      // 2. Settings document (Safe optimization to never exceed Firestore 1,048,576 bytes limit)
+      const settingsToUpload: AppSettings = { ...settings };
+      if (settingsToUpload.logoUrl && settingsToUpload.logoUrl.startsWith('data:image')) {
+        try {
+          // Compress logo to a crisp 380px web image (typically 25 KB - 60 KB)
+          const optimizedLogo = await ImageCompressionService.compressImageBase64(
+            settingsToUpload.logoUrl,
+            380,
+            0.82
+          );
+          if (optimizedLogo.length < settingsToUpload.logoUrl.length) {
+            settingsToUpload.logoUrl = optimizedLogo;
+            // Also update local storage with the compressed version to free browser memory
+            StorageService.saveSettings(settingsToUpload);
+          }
+        } catch (e) {
+          console.warn('Could not compress logoUrl before Firestore sync:', e);
+        }
+      }
+
+      // Hard check: Ensure the entire settings document is well below 800 KB
+      const serializedSettings = JSON.stringify(settingsToUpload);
+      if (serializedSettings.length > 800_000 && settingsToUpload.logoUrl) {
+        try {
+          settingsToUpload.logoUrl = await ImageCompressionService.compressImageBase64(
+            settingsToUpload.logoUrl,
+            240,
+            0.7
+          );
+          StorageService.saveSettings(settingsToUpload);
+        } catch {}
+      }
+
       const settingsDocRef = doc(db, 'settings', 'general');
-      await setDoc(settingsDocRef, JSON.parse(JSON.stringify(settings)), { merge: true });
+      await setDoc(settingsDocRef, JSON.parse(JSON.stringify(settingsToUpload)), { merge: true });
 
       // 3. Metadata sync status
       const metaDocRef = doc(db, 'metadata', 'sync_status');
@@ -307,43 +341,39 @@ export class FirestoreService {
         accountMovements: movsSnap.size
       };
 
-      // Only overwrite if cloud collections have data, or if specifically populated
-      if (prodsSnap.size > 0) {
-        const products = prodsSnap.docs.map(d => ({ ...d.data(), id: d.id } as ProductItem));
-        StorageService.saveProducts(products);
-      }
-      if (custsSnap.size > 0) {
-        const customers = custsSnap.docs.map(d => ({ ...d.data(), id: d.id } as Customer));
-        StorageService.saveCustomers(customers);
-      }
-      if (supsSnap.size > 0) {
-        const suppliers = supsSnap.docs.map(d => ({ ...d.data(), id: d.id } as Supplier));
-        StorageService.saveSuppliers(suppliers);
-      }
-      if (ordsSnap.size > 0) {
-        const orders = ordsSnap.docs.map(d => ({ ...d.data(), id: d.id } as CustomerOrder));
-        StorageService.saveCustomerOrders(orders);
-      }
-      if (pursSnap.size > 0) {
-        const purchases = pursSnap.docs.map(d => ({ ...d.data(), id: d.id } as PurchaseOrder));
-        StorageService.savePurchaseOrders(purchases);
-      }
-      if (salesSnap.size > 0) {
-        const sales = salesSnap.docs.map(d => ({ ...d.data(), id: d.id } as DailySale));
-        StorageService.saveDailySales(sales);
-      }
-      if (quotesSnap.size > 0) {
-        const quotes = quotesSnap.docs.map(d => ({ ...d.data(), id: d.id } as Quotation));
-        StorageService.saveQuotations(quotes);
-      }
-      if (movsSnap.size > 0) {
-        const movements = movsSnap.docs.map(d => ({ ...d.data(), id: d.id } as AccountMovement));
-        StorageService.saveAccountMovements(movements);
-      }
+      // Populate local storage directly with the exact data loaded from the cloud.
+      // If a collection in the cloud is empty (0 docs), local storage is set to empty [] (zero fictitious records).
+      const products = prodsSnap.docs.map(d => ({ ...d.data(), id: d.id } as ProductItem));
+      StorageService.saveProducts(products);
+
+      const customers = custsSnap.docs.map(d => ({ ...d.data(), id: d.id } as Customer));
+      StorageService.saveCustomers(customers);
+
+      const suppliers = supsSnap.docs.map(d => ({ ...d.data(), id: d.id } as Supplier));
+      StorageService.saveSuppliers(suppliers);
+
+      const orders = ordsSnap.docs.map(d => ({ ...d.data(), id: d.id } as CustomerOrder));
+      StorageService.saveCustomerOrders(orders);
+
+      const purchases = pursSnap.docs.map(d => ({ ...d.data(), id: d.id } as PurchaseOrder));
+      StorageService.savePurchaseOrders(purchases);
+
+      const sales = salesSnap.docs.map(d => ({ ...d.data(), id: d.id } as DailySale));
+      StorageService.saveDailySales(sales);
+
+      const quotes = quotesSnap.docs.map(d => ({ ...d.data(), id: d.id } as Quotation));
+      StorageService.saveQuotations(quotes);
+
+      const movements = movsSnap.docs.map(d => ({ ...d.data(), id: d.id } as AccountMovement));
+      StorageService.saveAccountMovements(movements);
+
       if (settSnap.exists()) {
         const cloudSettings = settSnap.data() as AppSettings;
         StorageService.saveSettings(cloudSettings);
       }
+
+      // Reset pending local changes count since local database now matches cloud 100%
+      StorageService.resetPendingChanges();
 
       const nowIso = new Date().toISOString();
       this.saveSyncInfo({
@@ -373,6 +403,18 @@ export class FirestoreService {
   }
 
   /**
+   * Delete an individual document directly from a cloud collection
+   */
+  static async deleteDocFromCloud(collectionName: string, id: string): Promise<void> {
+    try {
+      const docRef = doc(db, collectionName, id);
+      await deleteDoc(docRef);
+    } catch (e) {
+      console.warn(`Could not delete doc ${id} from cloud collection ${collectionName}:`, e);
+    }
+  }
+
+  /**
    * Listen to remote changes made by other devices in real time
    */
   static listenToRemoteSync(onRemoteChange: () => void): Unsubscribe {
@@ -397,26 +439,54 @@ export class FirestoreService {
   }
 
   /**
-   * Helper to write documents to a Firestore collection in batches of max 400 documents
+   * Synchronize a local collection to Firestore in batches, including deleting documents removed locally
    */
   private static async batchSyncCollection<T extends { id: string }>(
     collectionName: string,
     items: T[]
   ): Promise<void> {
-    if (items.length === 0) return;
+    try {
+      const existingSnap = await getDocs(collection(db, collectionName));
+      const localMap = new Map(items.map(item => [item.id, item]));
 
-    const batchSize = 400;
-    for (let i = 0; i < items.length; i += batchSize) {
-      const chunk = items.slice(i, i + batchSize);
-      const batch = writeBatch(db);
+      // Queue of operations: { type: 'set' | 'delete', ref: any, data?: any }
+      const ops: Array<{ type: 'set' | 'delete'; ref: any; data?: any }> = [];
 
-      for (const item of chunk) {
-        const docRef = doc(db, collectionName, item.id);
-        const cleanItem = JSON.parse(JSON.stringify(item));
-        batch.set(docRef, cleanItem, { merge: true });
+      // 1. Delete remote docs that no longer exist locally
+      for (const remoteDoc of existingSnap.docs) {
+        if (!localMap.has(remoteDoc.id)) {
+          ops.push({ type: 'delete', ref: remoteDoc.ref });
+        }
       }
 
-      await batch.commit();
+      // 2. Insert or update local docs
+      for (const item of items) {
+        const docRef = doc(db, collectionName, item.id);
+        let cleanItem = JSON.parse(JSON.stringify(item));
+        if (JSON.stringify(cleanItem).length > 700_000) {
+          cleanItem = await ImageCompressionService.sanitizeObjectImages(cleanItem, 400);
+        }
+        ops.push({ type: 'set', ref: docRef, data: cleanItem });
+      }
+
+      if (ops.length === 0) return;
+
+      const batchSize = 400;
+      for (let i = 0; i < ops.length; i += batchSize) {
+        const chunk = ops.slice(i, i + batchSize);
+        const batch = writeBatch(db);
+        for (const op of chunk) {
+          if (op.type === 'delete') {
+            batch.delete(op.ref);
+          } else {
+            batch.set(op.ref, op.data, { merge: true });
+          }
+        }
+        await batch.commit();
+      }
+    } catch (e) {
+      console.error(`Error in batchSyncCollection for ${collectionName}:`, e);
+      throw e;
     }
   }
 }

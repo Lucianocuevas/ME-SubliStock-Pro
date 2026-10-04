@@ -1,4 +1,4 @@
-export type ProductCategory = 
+export type DefaultProductCategory = 
   | 'tazas'
   | 'textil'
   | 'gorras'
@@ -8,7 +8,9 @@ export type ProductCategory =
   | 'papel_tinta'
   | 'otros';
 
-export type MaterialType =
+export type ProductCategory = DefaultProductCategory | (string & {});
+
+export type DefaultMaterialType =
   | 'ceramica'
   | 'polimero'
   | 'algodon'
@@ -16,11 +18,30 @@ export type MaterialType =
   | 'modal'
   | 'poliester'
   | 'acrilico'
+  | 'madera'
+  | 'neoprene'
   | 'aluminio_metal'
   | 'vinilo_textil'
   | 'papel_sublimacion'
   | 'tinta_sublimacion'
   | 'otro';
+
+export type MaterialType = DefaultMaterialType | (string & {});
+
+export interface CategoryDefinition {
+  id: string;
+  label: string;
+  icon?: string;
+  description?: string;
+  isCustom?: boolean;
+}
+
+export interface MaterialDefinition {
+  id: string;
+  label: string;
+  description?: string;
+  isCustom?: boolean;
+}
 
 export type SaleMode = 'lisa' | 'con_diseno' | 'estampada';
 

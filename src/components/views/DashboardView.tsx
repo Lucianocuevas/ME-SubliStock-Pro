@@ -1050,7 +1050,7 @@ export const DashboardView: React.FC<Props> = ({
                   <tr key={product.id} className="hover:bg-slate-950/40">
                     <td className="py-2 px-3 font-mono text-slate-400">{product.sku}</td>
                     <td className="py-2 px-3 font-medium text-white">{product.name}</td>
-                    <td className="py-2 px-3 text-slate-400">{CATEGORY_LABELS[product.category]?.label || product.category}</td>
+                    <td className="py-2 px-3 text-slate-400">{StorageService.getCategoryLabel(product.category)}</td>
                     <td className="py-2 px-3 text-slate-300">{product.size || '-'}</td>
                     <td className="py-2 px-3 text-center font-bold text-rose-400">{product.currentStock} {product.unit}</td>
                     <td className="py-2 px-3 text-center text-slate-400">{product.minStock} {product.unit}</td>

@@ -134,6 +134,10 @@ DATABASE_URL=mysql://${dbConfig.user || 'root'}:${encodeURIComponent(dbConfig.pa
     await FirestoreService.syncAllCollectionsToFirestore(products, customers, orders);
   };
 
+  const handleDownloadFromCloud = async () => {
+    await FirestoreService.downloadAllFromCloud();
+  };
+
   const handleToggleAutoSync = () => {
     const nextVal = !syncInfo.autoSyncEnabled;
     FirestoreService.setAutoSyncEnabled(nextVal);
@@ -301,8 +305,18 @@ DATABASE_URL=mysql://${dbConfig.user || 'root'}:${encodeURIComponent(dbConfig.pa
                 </div>
               </div>
 
-              {/* Action: Force Backup Button */}
-              <div className="flex items-center gap-2 self-start sm:self-center">
+              {/* Action: Cloud Sync Buttons */}
+              <div className="flex items-center gap-2 flex-wrap self-start sm:self-center">
+                <button
+                  onClick={handleDownloadFromCloud}
+                  disabled={syncInfo.status === 'syncing'}
+                  className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+                  title="Descarga y sincroniza los datos actuales guardados en la nube hacia este dispositivo"
+                >
+                  <Download className="w-4 h-4 text-cyan-400" />
+                  <span>Traer de la Nube</span>
+                </button>
+
                 <button
                   onClick={handleForceFirestoreSync}
                   disabled={syncInfo.status === 'syncing'}

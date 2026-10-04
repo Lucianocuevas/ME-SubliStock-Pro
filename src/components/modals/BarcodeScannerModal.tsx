@@ -716,8 +716,8 @@ export const BarcodeScannerModal: React.FC<Props> = ({
                       SKU: {matchedProduct.sku}
                     </span>
                     <span className="text-xs text-slate-400">
-                      {CATEGORY_LABELS[matchedProduct.category]?.label || matchedProduct.category}
-                      {matchedProduct.material ? ` · ${MATERIAL_LABELS[matchedProduct.material] || matchedProduct.material}` : ''}
+                      {StorageService.getCategoryLabel(matchedProduct.category)}
+                      {matchedProduct.material ? ` · ${StorageService.getMaterialLabel(matchedProduct.material)}` : ''}
                     </span>
                   </div>
                   <h4 className="text-base font-black text-white mt-1">

@@ -33,10 +33,15 @@ import {
   Smartphone,
   Monitor,
   BarChart3,
-  Layers
+  Layers,
+  Tags,
+  Plus,
+  Package
 } from 'lucide-react';
+import { CategoryDefinition, MaterialDefinition } from '../../types';
 import { StorageService, AppSettings, formatCurrency } from '../../services/storageService';
 import { FirestoreService } from '../../services/firestoreService';
+import { ImageCompressionService } from '../../services/imageCompressionService';
 import { ProductLabelsTab } from './settings/ProductLabelsTab';
 import { CloudSyncModal } from '../modals/CloudSyncModal';
 import { WindowsExeModal } from '../modals/WindowsExeModal';
@@ -47,13 +52,74 @@ interface Props {
 
 export const SettingsView: React.FC<Props> = ({ onRefreshData }) => {
   const [settings, setSettings] = useState<AppSettings>(StorageService.getSettings());
-  const [activeTab, setActiveTab] = useState<'company' | 'labels' | 'alerts' | 'billing' | 'backup' | 'preferences'>('company');
+  const [activeTab, setActiveTab] = useState<'company' | 'catalog' | 'labels' | 'alerts' | 'billing' | 'backup' | 'preferences'>('company');
   const [isSaved, setIsSaved] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
   const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
   const [isWindowsExeModalOpen, setIsWindowsExeModalOpen] = useState(false);
   const [isUploadingCloud, setIsUploadingCloud] = useState(false);
   const [pendingChanges, setPendingChanges] = useState(StorageService.getPendingChangesCount());
+
+  // Catalog tab states
+  const [categoriesList, setCategoriesList] = useState<CategoryDefinition[]>(() => StorageService.getCategories());
+  const [materialsList, setMaterialsList] = useState<MaterialDefinition[]>(() => StorageService.getMaterials());
+  const [newCatLabel, setNewCatLabel] = useState('');
+  const [newCatDesc, setNewCatDesc] = useState('');
+  const [newMatLabel, setNewMatLabel] = useState('');
+  const [newMatDesc, setNewMatDesc] = useState('');
+
+  const refreshCatalogLists = () => {
+    setCategoriesList(StorageService.getCategories());
+    setMaterialsList(StorageService.getMaterials());
+  };
+
+  const handleAddCategoryFromSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = newCatLabel.trim();
+    if (!trimmed) return;
+    try {
+      StorageService.addCustomCategory(trimmed, newCatDesc);
+      setNewCatLabel('');
+      setNewCatDesc('');
+      refreshCatalogLists();
+      showNotification(`¡Rubro "${trimmed}" agregado con éxito!`);
+      onRefreshData();
+    } catch (err: any) {
+      alert(err.message || 'Error al agregar rubro');
+    }
+  };
+
+  const handleAddMaterialFromSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = newMatLabel.trim();
+    if (!trimmed) return;
+    try {
+      StorageService.addCustomMaterial(trimmed, newMatDesc);
+      setNewMatLabel('');
+      setNewMatDesc('');
+      refreshCatalogLists();
+      showNotification(`¡Material "${trimmed}" agregado con éxito!`);
+      onRefreshData();
+    } catch (err: any) {
+      alert(err.message || 'Error al agregar material');
+    }
+  };
+
+  const handleDeleteCategoryFromSettings = (id: string, label: string) => {
+    if (!confirm(`¿Deseas eliminar el rubro personalizado "${label}"?`)) return;
+    StorageService.deleteCustomCategory(id);
+    refreshCatalogLists();
+    showNotification(`Rubro "${label}" eliminado.`);
+    onRefreshData();
+  };
+
+  const handleDeleteMaterialFromSettings = (id: string, label: string) => {
+    if (!confirm(`¿Deseas eliminar el material personalizado "${label}"?`)) return;
+    StorageService.deleteCustomMaterial(id);
+    refreshCatalogLists();
+    showNotification(`Material "${label}" eliminado.`);
+    onRefreshData();
+  };
 
   // Preferences
   const [prefShowAndroidHeader, setPrefShowAndroidHeader] = useState(() => localStorage.getItem('sublistock_show_android_header') !== 'false');
@@ -98,23 +164,24 @@ export const SettingsView: React.FC<Props> = ({ onRefreshData }) => {
     setTimeout(() => setIsSaved(false), 2500);
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 3 * 1024 * 1024) {
-        alert('El archivo no debe superar los 3MB.');
+      if (file.size > 5 * 1024 * 1024) {
+        alert('El archivo no debe superar los 5MB.');
         return;
       }
-      const reader = new FileReader();
-      reader.onload = () => {
-        const logoData = reader.result as string;
-        const updated = { ...settings, logoUrl: logoData };
+      try {
+        const compressedLogo = await ImageCompressionService.compressFileToDataUrl(file, 400, 0.85);
+        const updated = { ...settings, logoUrl: compressedLogo };
         setSettings(updated);
         StorageService.saveSettings(updated);
-        showNotification('Logo de la empresa actualizado.');
+        showNotification('Logo optimizado y actualizado correctamente.');
         onRefreshData();
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error('Error al procesar el logo:', err);
+        alert('Error al procesar la imagen del logo.');
+      }
     }
   };
 
@@ -191,20 +258,20 @@ export const SettingsView: React.FC<Props> = ({ onRefreshData }) => {
   };
 
   const handleZeroFictitiousData = () => {
-    if (confirm('¿Poner a 0 todas las ventas, pedidos, presupuestos y datos ficticios? Tus productos e insumos se conservarán intactos.')) {
+    if (confirm('¿Poner a 0 todas las ventas, pedidos, compras y movimientos? Tus productos e insumos se conservarán.')) {
       StorageService.resetFictitiousDataToZero(true);
       setSettings(StorageService.getSettings());
       onRefreshData();
-      showNotification('Datos ficticios restablecidos a 0. Tus productos se conservaron intactos.');
+      showNotification('Ventas y pedidos restablecidos a 0. Tus productos se conservaron intactos.');
     }
   };
 
   const handleResetDemo = () => {
-    if (confirm('¿Restablecer el sistema a valores iniciales limpios?')) {
-      StorageService.resetFictitiousDataToZero(true);
+    if (confirm('¿Eliminar todos los datos ficticios y poner todo a 0? Quedará la base limpia para que solo contenga lo que cargues manualmente en la nube.')) {
+      StorageService.resetFictitiousDataToZero(false);
       setSettings(StorageService.getSettings());
       onRefreshData();
-      showNotification('Sistema restablecido correctamente conservando tus productos.');
+      showNotification('Base limpia a 0 sin datos ficticios. Lista para sincronizar únicamente con tu nube.');
     }
   };
 
@@ -269,6 +336,18 @@ export const SettingsView: React.FC<Props> = ({ onRefreshData }) => {
         >
           <Building className="w-4 h-4 text-cyan-400" />
           <span>Datos & Logo de la Empresa</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('catalog')}
+          className={`px-4 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'catalog'
+              ? 'bg-slate-800 text-white border border-slate-700 shadow-sm'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+          }`}
+        >
+          <Tags className="w-4 h-4 text-orange-400" />
+          <span>Rubros & Materiales</span>
         </button>
 
         <button
@@ -664,6 +743,199 @@ export const SettingsView: React.FC<Props> = ({ onRefreshData }) => {
             </button>
           </div>
         </form>
+      )}
+
+      {/* TAB: RUBROS Y MATERIALES */}
+      {activeTab === 'catalog' && (
+        <div className="space-y-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 space-y-2">
+            <div className="flex items-center gap-2">
+              <Tags className="w-5 h-5 text-orange-400" />
+              <h3 className="text-base font-bold text-white uppercase tracking-wider">
+                Catálogo de Rubros y Tipos de Materiales
+              </h3>
+            </div>
+            <p className="text-xs text-slate-400">
+              Personaliza los rubros y materiales de los insumos que utilizas en tu taller de sublimación. Los nuevos tipos creados estarán disponibles automáticamente para agregar productos, filtrar inventario, asociar a proveedores y generar etiquetas.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* SECCIÓN 1: RUBROS */}
+            <div className="space-y-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Tags className="w-4 h-4 text-orange-400" />
+                    <h4 className="text-sm font-bold text-white">Rubros / Categorías</h4>
+                  </div>
+                  <span className="text-xs text-slate-400 font-mono">
+                    {categoriesList.length} registrados
+                  </span>
+                </div>
+
+                {/* Form Agregar Rubro */}
+                <form onSubmit={handleAddCategoryFromSettings} className="bg-slate-950/70 border border-orange-500/30 rounded-lg p-3.5 space-y-2.5">
+                  <span className="text-[11px] font-bold text-orange-300 block uppercase tracking-wider">
+                    + Nuevo Rubro de Insumo
+                  </span>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={newCatLabel}
+                      onChange={e => setNewCatLabel(e.target.value)}
+                      placeholder="Nombre del Rubro (ej: Termos y Botellas, Cuadros...)"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500"
+                      required
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newCatDesc}
+                        onChange={e => setNewCatDesc(e.target.value)}
+                        placeholder="Descripción opcional"
+                        className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-orange-500"
+                      />
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 transition-colors shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Agregar</span>
+                      </button>
+                    </div>
+                  </div>
+                </form>
+
+                {/* Lista de Rubros */}
+                <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                  {categoriesList.map(cat => (
+                    <div
+                      key={cat.id}
+                      className="p-2.5 bg-slate-950/60 border border-slate-800 rounded-lg flex items-center justify-between gap-2 hover:border-slate-700 transition-colors"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-white truncate">{cat.label}</span>
+                          {cat.isCustom ? (
+                            <span className="px-1.5 py-0.5 bg-orange-500/20 text-orange-400 text-[10px] rounded border border-orange-500/30">
+                              Personalizado
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 bg-slate-800 text-slate-400 text-[10px] rounded">
+                              Estándar
+                            </span>
+                          )}
+                        </div>
+                        {cat.description && (
+                          <p className="text-[11px] text-slate-400 truncate mt-0.5">{cat.description}</p>
+                        )}
+                      </div>
+
+                      {cat.isCustom && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCategoryFromSettings(cat.id, cat.label)}
+                          className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 rounded transition-colors"
+                          title="Eliminar rubro"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* SECCIÓN 2: TIPOS DE MATERIALES */}
+            <div className="space-y-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-cyan-400" />
+                    <h4 className="text-sm font-bold text-white">Tipos de Materiales</h4>
+                  </div>
+                  <span className="text-xs text-slate-400 font-mono">
+                    {materialsList.length} registrados
+                  </span>
+                </div>
+
+                {/* Form Agregar Material */}
+                <form onSubmit={handleAddMaterialFromSettings} className="bg-slate-950/70 border border-cyan-500/30 rounded-lg p-3.5 space-y-2.5">
+                  <span className="text-[11px] font-bold text-cyan-300 block uppercase tracking-wider">
+                    + Nuevo Tipo de Material
+                  </span>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={newMatLabel}
+                      onChange={e => setNewMatLabel(e.target.value)}
+                      placeholder="Nombre del Material (ej: Acero Inoxidable, Goma EVA, Vidrio...)"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                      required
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newMatDesc}
+                        onChange={e => setNewMatDesc(e.target.value)}
+                        placeholder="Descripción opcional"
+                        className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                      />
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 transition-colors shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Agregar</span>
+                      </button>
+                    </div>
+                  </div>
+                </form>
+
+                {/* Lista de Materiales */}
+                <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                  {materialsList.map(mat => (
+                    <div
+                      key={mat.id}
+                      className="p-2.5 bg-slate-950/60 border border-slate-800 rounded-lg flex items-center justify-between gap-2 hover:border-slate-700 transition-colors"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-white truncate">{mat.label}</span>
+                          {mat.isCustom ? (
+                            <span className="px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 text-[10px] rounded border border-cyan-500/30">
+                              Personalizado
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 bg-slate-800 text-slate-400 text-[10px] rounded">
+                              Estándar
+                            </span>
+                          )}
+                        </div>
+                        {mat.description && (
+                          <p className="text-[11px] text-slate-400 truncate mt-0.5">{mat.description}</p>
+                        )}
+                      </div>
+
+                      {mat.isCustom && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMaterialFromSettings(mat.id, mat.label)}
+                          className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 rounded transition-colors"
+                          title="Eliminar material"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* TAB: ETIQUETAS DE PRODUCTOS */}

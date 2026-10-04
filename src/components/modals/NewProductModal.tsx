@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, PackagePlus, Save } from 'lucide-react';
-import { ProductItem, ProductCategory, MaterialType, Supplier } from '../../types';
+import { X, PackagePlus, Save, Plus, Check } from 'lucide-react';
+import { ProductItem, ProductCategory, MaterialType, Supplier, CategoryDefinition, MaterialDefinition } from '../../types';
 import { StorageService } from '../../services/storageService';
-import { CATEGORY_LABELS, MATERIAL_LABELS } from '../../data/initialData';
 
 interface Props {
   isOpen: boolean;
@@ -35,6 +34,57 @@ export const NewProductModal: React.FC<Props> = ({
   const [supplierId, setSupplierId] = useState('');
   const [location, setLocation] = useState('');
   const [description, setDescription] = useState('');
+
+  // Categories & Materials dynamic lists
+  const [categoriesList, setCategoriesList] = useState<CategoryDefinition[]>(() => StorageService.getCategories());
+  const [materialsList, setMaterialsList] = useState<MaterialDefinition[]>(() => StorageService.getMaterials());
+
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isAddingMaterial, setIsAddingMaterial] = useState(false);
+  const [newMaterialName, setNewMaterialName] = useState('');
+
+  // Reload categories & materials when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setCategoriesList(StorageService.getCategories());
+      setMaterialsList(StorageService.getMaterials());
+      setIsAddingCategory(false);
+      setIsAddingMaterial(false);
+      setNewCategoryName('');
+      setNewMaterialName('');
+    }
+  }, [isOpen]);
+
+  const handleCreateCategory = (e?: React.MouseEvent | React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) return;
+    try {
+      const created = StorageService.addCustomCategory(trimmed);
+      setCategoriesList(StorageService.getCategories());
+      setCategory(created.id);
+      setNewCategoryName('');
+      setIsAddingCategory(false);
+    } catch (err: any) {
+      alert(err.message || 'Error al crear rubro');
+    }
+  };
+
+  const handleCreateMaterial = (e?: React.MouseEvent | React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = newMaterialName.trim();
+    if (!trimmed) return;
+    try {
+      const created = StorageService.addCustomMaterial(trimmed);
+      setMaterialsList(StorageService.getMaterials());
+      setMaterial(created.id);
+      setNewMaterialName('');
+      setIsAddingMaterial(false);
+    } catch (err: any) {
+      alert(err.message || 'Error al crear material');
+    }
+  };
 
   useEffect(() => {
     if (productToEdit) {
@@ -175,33 +225,145 @@ export const NewProductModal: React.FC<Props> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Rubro */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                Rubro
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Rubro
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCategory(!isAddingCategory)}
+                  className="text-[11px] text-orange-400 hover:text-orange-300 font-medium flex items-center gap-1 transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>{isAddingCategory ? 'Cerrar' : '+ Agregar Rubro'}</span>
+                </button>
+              </div>
+
+              {isAddingCategory && (
+                <div className="mb-2 p-2.5 bg-orange-950/20 border border-orange-500/30 rounded-lg space-y-2">
+                  <div className="text-[11px] text-orange-300 font-semibold flex items-center gap-1">
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Crear nuevo Rubro de Insumo</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={e => setNewCategoryName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleCreateCategory();
+                        }
+                      }}
+                      placeholder="Ej: Termos y Botellas, Cuadros..."
+                      className="flex-1 bg-slate-950 border border-orange-500/50 rounded px-2.5 py-1 text-xs text-white focus:outline-none focus:border-orange-400"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateCategory}
+                      className="px-2.5 py-1 bg-orange-600 hover:bg-orange-500 text-white rounded text-xs font-bold flex items-center gap-1"
+                    >
+                      <Check className="w-3 h-3" />
+                      <span>Guardar</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <select
                 value={category}
-                onChange={e => setCategory(e.target.value as ProductCategory)}
+                onChange={e => {
+                  if (e.target.value === '__add_new__') {
+                    setIsAddingCategory(true);
+                  } else {
+                    setCategory(e.target.value as ProductCategory);
+                  }
+                }}
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
               >
-                {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>{v.label}</option>
+                {categoriesList.map(cat => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.label} {cat.isCustom ? '(Personalizado)' : ''}
+                  </option>
                 ))}
+                <option value="__add_new__" className="text-orange-400 font-semibold">
+                  + Agregar nuevo rubro...
+                </option>
               </select>
             </div>
 
+            {/* Material Principal */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                Material Principal
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Material Principal
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingMaterial(!isAddingMaterial)}
+                  className="text-[11px] text-cyan-400 hover:text-cyan-300 font-medium flex items-center gap-1 transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>{isAddingMaterial ? 'Cerrar' : '+ Agregar Material'}</span>
+                </button>
+              </div>
+
+              {isAddingMaterial && (
+                <div className="mb-2 p-2.5 bg-cyan-950/20 border border-cyan-500/30 rounded-lg space-y-2">
+                  <div className="text-[11px] text-cyan-300 font-semibold flex items-center gap-1">
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Crear nuevo Material</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={newMaterialName}
+                      onChange={e => setNewMaterialName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleCreateMaterial();
+                        }
+                      }}
+                      placeholder="Ej: Acero Inoxidable, Goma EVA, Vidrio..."
+                      className="flex-1 bg-slate-950 border border-cyan-500/50 rounded px-2.5 py-1 text-xs text-white focus:outline-none focus:border-cyan-400"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateMaterial}
+                      className="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-xs font-bold flex items-center gap-1"
+                    >
+                      <Check className="w-3 h-3" />
+                      <span>Guardar</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <select
                 value={material}
-                onChange={e => setMaterial(e.target.value as MaterialType)}
+                onChange={e => {
+                  if (e.target.value === '__add_new__') {
+                    setIsAddingMaterial(true);
+                  } else {
+                    setMaterial(e.target.value as MaterialType);
+                  }
+                }}
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
               >
-                {Object.entries(MATERIAL_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
+                {materialsList.map(mat => (
+                  <option key={mat.id} value={mat.id}>
+                    {mat.label} {mat.isCustom ? '(Personalizado)' : ''}
+                  </option>
                 ))}
+                <option value="__add_new__" className="text-cyan-400 font-semibold">
+                  + Agregar nuevo material...
+                </option>
               </select>
             </div>
           </div>

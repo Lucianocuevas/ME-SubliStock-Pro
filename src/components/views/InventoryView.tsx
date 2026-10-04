@@ -19,14 +19,15 @@ import {
   Camera,
   QrCode,
   FileText,
-  CheckCircle2
+  CheckCircle2,
+  Tags
 } from 'lucide-react';
-import { ProductItem, ProductCategory, MaterialType } from '../../types';
+import { ProductItem, ProductCategory, MaterialType, CategoryDefinition, MaterialDefinition } from '../../types';
 import { StorageService, formatCurrency } from '../../services/storageService';
 import { ExportService } from '../../services/exportService';
-import { CATEGORY_LABELS, MATERIAL_LABELS } from '../../data/initialData';
 import { BarcodeScannerModal } from '../modals/BarcodeScannerModal';
 import { ProductQrModal } from '../modals/ProductQrModal';
+import { ManageCatalogModal } from '../modals/ManageCatalogModal';
 
 interface Props {
   products: ProductItem[];
@@ -55,6 +56,19 @@ export const InventoryView: React.FC<Props> = ({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
   const [selectedProductForQr, setSelectedProductForQr] = useState<ProductItem | null>(null);
+  const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
+  const [categories, setCategories] = useState<CategoryDefinition[]>(() => StorageService.getCategories());
+  const [materials, setMaterials] = useState<MaterialDefinition[]>(() => StorageService.getMaterials());
+
+  // Reload categories & materials on catalog update
+  React.useEffect(() => {
+    const handleCatalogUpdated = () => {
+      setCategories(StorageService.getCategories());
+      setMaterials(StorageService.getMaterials());
+    };
+    window.addEventListener('sublistock_catalog_updated', handleCatalogUpdated);
+    return () => window.removeEventListener('sublistock_catalog_updated', handleCatalogUpdated);
+  }, []);
 
   // Filtering logic
   const dismissedSet = useMemo(() => new Set(StorageService.getSettings().dismissedAlertProductIds || []), [products]);
@@ -204,6 +218,15 @@ export const InventoryView: React.FC<Props> = ({
           </button>
 
           <button
+            onClick={() => setIsCatalogModalOpen(true)}
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-orange-400 border border-slate-700 hover:border-orange-500/50 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Administrar y agregar nuevos rubros y tipos de materiales"
+          >
+            <Tags className="w-4 h-4 text-orange-400" />
+            <span>Rubros & Materiales</span>
+          </button>
+
+          <button
             onClick={onOpenNewProduct}
             className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-orange-950/50 transition-colors"
           >
@@ -265,9 +288,11 @@ export const InventoryView: React.FC<Props> = ({
               onChange={e => setSelectedCategory(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500"
             >
-              <option value="all">Todos los Rubros</option>
-              {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v.label}</option>
+              <option value="all">Todos los Rubros ({categories.length})</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.label} {cat.isCustom ? '(Personalizado)' : ''}
+                </option>
               ))}
             </select>
           </div>
@@ -279,9 +304,11 @@ export const InventoryView: React.FC<Props> = ({
               onChange={e => setSelectedMaterial(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500"
             >
-              <option value="all">Todos los Materiales</option>
-              {Object.entries(MATERIAL_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
+              <option value="all">Todos los Materiales ({materials.length})</option>
+              {materials.map(mat => (
+                <option key={mat.id} value={mat.id}>
+                  {mat.label} {mat.isCustom ? '(Personalizado)' : ''}
+                </option>
               ))}
             </select>
           </div>
@@ -312,24 +339,32 @@ export const InventoryView: React.FC<Props> = ({
           >
             Todos ({products.length})
           </button>
-          {Object.entries(CATEGORY_LABELS).map(([k, v]) => {
-            const count = products.filter(p => p.category === k).length;
-            if (count === 0) return null;
+          {categories.map(cat => {
+            const count = products.filter(p => p.category === cat.id).length;
+            if (count === 0 && !cat.isCustom) return null;
             return (
               <button
-                key={k}
-                onClick={() => setSelectedCategory(k)}
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
                 className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  selectedCategory === k
+                  selectedCategory === cat.id
                     ? 'bg-orange-600 text-white font-bold'
                     : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
                 }`}
               >
-                <span>{v.label}</span>
+                <span>{cat.label}</span>
                 <span className="opacity-70 text-[10px]">({count})</span>
               </button>
             );
           })}
+          <button
+            onClick={() => setIsCatalogModalOpen(true)}
+            className="px-2.5 py-1.5 rounded-lg font-medium whitespace-nowrap bg-slate-950 text-orange-400 hover:text-orange-300 border border-dashed border-orange-500/40 hover:border-orange-500 flex items-center gap-1 transition-colors text-[11px]"
+            title="Agregar nuevo rubro o material"
+          >
+            <Plus className="w-3 h-3" />
+            <span>+ Rubro / Material</span>
+          </button>
         </div>
       </div>
 
@@ -392,10 +427,10 @@ export const InventoryView: React.FC<Props> = ({
 
                       <td className="py-3.5 px-3">
                         <span className="text-slate-200 font-medium block">
-                          {CATEGORY_LABELS[product.category]?.label || product.category}
+                          {StorageService.getCategoryLabel(product.category)}
                         </span>
                         <span className="text-[11px] text-cyan-400">
-                          {MATERIAL_LABELS[product.material] || product.material}
+                          {StorageService.getMaterialLabel(product.material)}
                         </span>
                       </td>
 
@@ -570,6 +605,13 @@ export const InventoryView: React.FC<Props> = ({
         onClose={() => setSelectedProductForQr(null)}
         product={selectedProductForQr}
         onPrintLabel={onNavigateToLabels ? () => onNavigateToLabels() : undefined}
+      />
+
+      {/* Manage Catalog (Rubros & Materiales) Modal */}
+      <ManageCatalogModal
+        isOpen={isCatalogModalOpen}
+        onClose={() => setIsCatalogModalOpen(false)}
+        onCatalogChanged={onRefreshData}
       />
     </div>
   );

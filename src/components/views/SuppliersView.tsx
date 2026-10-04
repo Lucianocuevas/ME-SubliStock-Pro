@@ -177,7 +177,7 @@ export const SuppliersView: React.FC<Props> = ({
                     <div className="flex flex-wrap gap-1">
                       {supplier.suppliedCategories.map(cat => (
                         <span key={cat} className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] text-slate-300">
-                          {CATEGORY_LABELS[cat]?.label || cat}
+                          {StorageService.getCategoryLabel(cat)}
                         </span>
                       ))}
                     </div>

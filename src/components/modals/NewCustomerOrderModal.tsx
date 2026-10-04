@@ -4,6 +4,7 @@ import { Customer, ProductItem, CustomerOrderItem, CustomerOrder } from '../../t
 import { StorageService, formatCurrency } from '../../services/storageService';
 import { GoogleCalendarService } from '../../services/googleCalendarService';
 import { AuthService } from '../../services/authService';
+import { ImageCompressionService } from '../../services/imageCompressionService';
 
 interface Props {
   isOpen: boolean;
@@ -63,21 +64,18 @@ export const NewCustomerOrderModal: React.FC<Props> = ({
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert('La imagen no debe superar los 2MB');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => {
-        setItemDesignImage(reader.result as string);
+      try {
+        const compressed = await ImageCompressionService.compressFileToDataUrl(file, 500, 0.82);
+        setItemDesignImage(compressed);
         if (!itemDesignName) {
           setItemDesignName(file.name.replace(/\.[^/.]+$/, ''));
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error('Error al procesar imagen de diseño:', err);
+      }
     }
   };
 

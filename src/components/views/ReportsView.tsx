@@ -327,7 +327,7 @@ export const ReportsView: React.FC<Props> = ({
             ) : (
               Object.entries(categoryStats).map(([catKey, data]) => {
                 const percent = totalRevenue > 0 ? (data.revenue / totalRevenue) * 100 : 0;
-                const label = CATEGORY_LABELS[catKey]?.label || catKey;
+                const label = StorageService.getCategoryLabel(catKey);
 
                 return (
                   <div key={catKey} className="space-y-1">
@@ -370,7 +370,7 @@ export const ReportsView: React.FC<Props> = ({
             ) : (
               Object.entries(materialStats).map(([matKey, qty]) => (
                 <div key={matKey} className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
-                  <span className="text-slate-300">{MATERIAL_LABELS[matKey] || matKey}</span>
+                  <span className="text-slate-300">{StorageService.getMaterialLabel(matKey)}</span>
                   <strong className="text-cyan-400 font-mono text-sm">{qty} unidades</strong>
                 </div>
               ))

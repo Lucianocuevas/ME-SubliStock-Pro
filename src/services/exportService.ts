@@ -3,7 +3,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ProductItem, CustomerOrder, DailySale, PurchaseOrder, MonthlyReportSummary, AccountMovement } from '../types';
 import { CATEGORY_LABELS, MATERIAL_LABELS } from '../data/initialData';
-import { formatCurrency, AppSettings } from './storageService';
+import { formatCurrency, AppSettings, StorageService } from './storageService';
 
 export class ExportService {
   /**
@@ -89,8 +89,8 @@ export class ExportService {
       ['SKU', 'Insumo / Producto', 'Rubro', 'Material', 'Talle/Tamaño', 'Stock Actual', 'Stock Mínimo', 'Déficit', 'Costo Unit.', 'Estado']
     ];
     for (const p of criticalProducts) {
-      const cat = CATEGORY_LABELS[p.category]?.label || p.category;
-      const mat = MATERIAL_LABELS[p.material] || p.material;
+      const cat = StorageService.getCategoryLabel(p.category);
+      const mat = StorageService.getMaterialLabel(p.material);
       const status = p.currentStock === 0 ? 'AGOTADO' : (p.currentStock <= p.minStock ? 'CRÍTICO' : 'ALERTA');
       alertsData.push([
         p.sku,
@@ -144,8 +144,8 @@ export class ExportService {
     ];
 
     for (const p of products) {
-      const cat = CATEGORY_LABELS[p.category]?.label || p.category;
-      const mat = MATERIAL_LABELS[p.material] || p.material;
+      const cat = StorageService.getCategoryLabel(p.category);
+      const mat = StorageService.getMaterialLabel(p.material);
       let alertState = 'Normal';
       if (p.currentStock === 0) alertState = 'AGOTADO';
       else if (p.currentStock <= p.minStock) alertState = 'CRÍTICO';
@@ -327,8 +327,8 @@ export class ExportService {
 
     // Prepare table rows
     const tableData = products.map(p => {
-      const cat = CATEGORY_LABELS[p.category]?.label || p.category;
-      const mat = MATERIAL_LABELS[p.material] || p.material;
+      const cat = StorageService.getCategoryLabel(p.category);
+      const mat = StorageService.getMaterialLabel(p.material);
       const talleColor = [p.size ? `T: ${p.size}` : null, p.color].filter(Boolean).join(' / ') || '-';
       const rowValuation = p.currentStock * p.costPrice;
 
@@ -540,7 +540,7 @@ export class ExportService {
     const alertsBody = criticalProducts.map(p => [
       p.sku,
       p.name,
-      CATEGORY_LABELS[p.category]?.label || p.category,
+      StorageService.getCategoryLabel(p.category),
       p.size || '-',
       `${p.currentStock} ${p.unit}`,
       `${p.minStock} ${p.unit}`,
@@ -1035,7 +1035,7 @@ export class ExportService {
       const alertsRows = criticalProducts.map(p => [
         p.sku,
         p.name,
-        CATEGORY_LABELS[p.category]?.label || p.category,
+        StorageService.getCategoryLabel(p.category),
         p.size || '-',
         `${p.currentStock} ${p.unit}`,
         `${p.minStock} ${p.unit}`,

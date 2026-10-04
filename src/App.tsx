@@ -129,12 +129,25 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Zero out old fictitious records on mount if not done yet, keeping products intact
-    if (localStorage.getItem('sublistock_zeroed_fictitious_v1') !== 'true') {
-      StorageService.resetFictitiousDataToZero(true);
+    // 1. Zero out any legacy fictitious mock items once and for all: only real cloud data is preserved
+    if (localStorage.getItem('sublistock_clean_cloud_v2') !== 'true') {
+      StorageService.resetFictitiousDataToZero(false);
+      localStorage.setItem('sublistock_clean_cloud_v2', 'true');
     }
 
+    // 2. Load current local data
     loadData();
+
+    // 3. Every time the app starts, immediately pull only the data manually loaded in the cloud
+    FirestoreService.downloadAllFromCloud()
+      .then(res => {
+        if (res.success) {
+          loadData();
+        }
+      })
+      .catch(err => {
+        console.warn('Initial cloud sync error:', err);
+      });
 
     // Listen to reactive update events
     const handleUpdate = () => loadData();
@@ -158,6 +171,19 @@ export default function App() {
     };
     window.addEventListener('sublistock_prefs_updated', handlePrefs);
 
+    // Auto-sync debounced timer: uploads manually loaded data to the cloud automatically
+    let autoSyncTimeout: any = null;
+    const handleAutoSync = () => {
+      const syncInfo = FirestoreService.getSyncInfo();
+      if (syncInfo.autoSyncEnabled && typeof navigator !== 'undefined' && navigator.onLine) {
+        if (autoSyncTimeout) clearTimeout(autoSyncTimeout);
+        autoSyncTimeout = setTimeout(() => {
+          FirestoreService.uploadAllToCloud();
+        }, 1200);
+      }
+    };
+    window.addEventListener('sublistock_pending_changes_updated', handleAutoSync);
+
     // Listen to real-time sync events from other devices (PC, Android, iOS) via Firestore
     const unsubscribeCloud = FirestoreService.listenToRemoteSync(() => {
       FirestoreService.downloadAllFromCloud().then(res => {
@@ -168,6 +194,7 @@ export default function App() {
     });
 
     return () => {
+      if (autoSyncTimeout) clearTimeout(autoSyncTimeout);
       window.removeEventListener('sublistock_products_updated', handleUpdate);
       window.removeEventListener('sublistock_orders_updated', handleUpdate);
       window.removeEventListener('sublistock_purchases_updated', handleUpdate);
@@ -182,6 +209,7 @@ export default function App() {
       window.removeEventListener('sublistock_auth_changed', handleUpdate);
       window.removeEventListener('sublistock_reset_to_zero', handleUpdate);
       window.removeEventListener('sublistock_prefs_updated', handlePrefs);
+      window.removeEventListener('sublistock_pending_changes_updated', handleAutoSync);
       if (unsubscribeCloud) unsubscribeCloud();
     };
   }, [loadData]);

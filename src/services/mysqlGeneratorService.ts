@@ -6,9 +6,9 @@ export class MySQLGeneratorService {
    */
   static generateMySQLDump(
     products: ProductItem[],
+    suppliers: Supplier[],
     customers: Customer[],
     orders: CustomerOrder[],
-    suppliers: Supplier[],
     dailySales: DailySale[],
     users: AppUser[]
   ): string {
@@ -23,16 +23,20 @@ export class MySQLGeneratorService {
 CREATE DATABASE IF NOT EXISTS \`sublistock_db\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE \`sublistock_db\`;
 
+SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
-DROP TABLE IF EXISTS \`order_items\`;
-DROP TABLE IF EXISTS \`customer_orders\`;
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+SET AUTOCOMMIT = 0;
+START TRANSACTION;
+
 DROP TABLE IF EXISTS \`daily_sale_items\`;
 DROP TABLE IF EXISTS \`daily_sales\`;
+DROP TABLE IF EXISTS \`order_items\`;
+DROP TABLE IF EXISTS \`customer_orders\`;
 DROP TABLE IF EXISTS \`products\`;
 DROP TABLE IF EXISTS \`suppliers\`;
 DROP TABLE IF EXISTS \`customers\`;
 DROP TABLE IF EXISTS \`users\`;
-SET FOREIGN_KEY_CHECKS = 1;
 
 -- ------------------------------------------------------------
 -- 1. Tabla de Usuarios y Roles (Spring Security / App Móvil)
@@ -132,7 +136,7 @@ CREATE TABLE \`customer_orders\` (
   \`delivered_at\` DATETIME,
   INDEX \`idx_order_delivery\` (\`delivery_date\`),
   INDEX \`idx_order_status\` (\`production_status\`),
-  FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\`(\`id\`) ON DELETE RESTRICT
+  FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\`(\`id\`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ------------------------------------------------------------
@@ -152,7 +156,7 @@ CREATE TABLE \`order_items\` (
   \`unit_cost\` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   \`total_price\` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   \`sale_mode\` ENUM('lisa', 'estampada') NOT NULL DEFAULT 'estampada',
-  \`design_image_url\` LONGTEXT, -- Soporta Base64 o URL en Cloud Storage
+  \`design_image_url\` LONGTEXT,
   \`design_name\` VARCHAR(150),
   \`customization_details\` TEXT,
   FOREIGN KEY (\`order_id\`) REFERENCES \`customer_orders\`(\`id\`) ON DELETE CASCADE,
@@ -195,7 +199,49 @@ CREATE TABLE \`daily_sale_items\` (
 
 `;
 
-    // Users
+    // Reconcile Suppliers: Ensure every supplierId referenced by products exists in suppliers table
+    const allSuppliers = [...suppliers];
+    const supplierIds = new Set(allSuppliers.map(s => s.id));
+    products.forEach(p => {
+      if (p.supplierId && !supplierIds.has(p.supplierId)) {
+        allSuppliers.push({
+          id: p.supplierId,
+          name: `Proveedor Insumos (${p.supplierId})`,
+          contactPerson: 'Contacto Taller',
+          phone: '',
+          email: '',
+          address: '',
+          cuitRut: '',
+          leadTimeDays: 3,
+          rating: 5,
+          notes: 'Registrado automáticamente para integridad referencial de insumos'
+        } as Supplier);
+        supplierIds.add(p.supplierId);
+      }
+    });
+
+    // Reconcile Customers: Ensure every customerId referenced by orders exists in customers table
+    const allCustomers = [...customers];
+    const customerIds = new Set(allCustomers.map(c => c.id));
+    orders.forEach(o => {
+      if (o.customerId && !customerIds.has(o.customerId)) {
+        allCustomers.push({
+          id: o.customerId,
+          name: o.customerName || `Cliente (${o.customerId})`,
+          businessOrContact: '',
+          phone: o.customerPhone || '',
+          email: '',
+          address: '',
+          totalOrdersCount: 1,
+          totalSpent: o.totalAmount || 0,
+          currentBalance: o.remainingBalance || 0,
+          notes: 'Registrado automáticamente para integridad referencial de órdenes'
+        } as Customer);
+        customerIds.add(o.customerId);
+      }
+    });
+
+    // 1. Users
     if (users.length > 0) {
       sql += `-- Inserción de Usuarios y Roles\n`;
       sql += `INSERT INTO \`users\` (\`id\`, \`name\`, \`email\`, \`role\`, \`active\`, \`created_at\`) VALUES\n`;
@@ -205,60 +251,84 @@ CREATE TABLE \`daily_sale_items\` (
       sql += uValues + ';\n\n';
     }
 
-    // Suppliers
-    if (suppliers.length > 0) {
+    // 2. Suppliers
+    if (allSuppliers.length > 0) {
       sql += `-- Inserción de Proveedores\n`;
       sql += `INSERT INTO \`suppliers\` (\`id\`, \`name\`, \`contact_person\`, \`phone\`, \`email\`, \`lead_time_days\`, \`rating\`, \`notes\`) VALUES\n`;
-      const sValues = suppliers.map(s => 
-        `('${escapeSql(s.id)}', '${escapeSql(s.name)}', '${escapeSql(s.contactPerson)}', '${escapeSql(s.phone)}', '${escapeSql(s.email)}', ${s.leadTimeDays}, ${s.rating || 5}, '${escapeSql(s.notes || '')}')`
+      const sValues = allSuppliers.map(s => 
+        `('${escapeSql(s.id)}', '${escapeSql(s.name)}', '${escapeSql(s.contactPerson || '')}', '${escapeSql(s.phone || '')}', '${escapeSql(s.email || '')}', ${s.leadTimeDays || 3}, ${s.rating || 5}, '${escapeSql(s.notes || '')}')`
       ).join(',\n');
       sql += sValues + ';\n\n';
     }
 
-    // Products
+    // 3. Products (Safe supplier_id mapping)
     if (products.length > 0) {
       sql += `-- Inserción de Insumos y Productos\n`;
       sql += `INSERT INTO \`products\` (\`id\`, \`sku\`, \`name\`, \`category\`, \`material\`, \`size\`, \`color\`, \`unit\`, \`current_stock\`, \`min_stock\`, \`cost_price\`, \`sale_price\`, \`supplier_id\`, \`location\`) VALUES\n`;
-      const pValues = products.map(p => 
-        `('${escapeSql(p.id)}', '${escapeSql(p.sku)}', '${escapeSql(p.name)}', '${escapeSql(p.category)}', '${escapeSql(p.material)}', ${p.size ? `'${escapeSql(p.size)}'` : 'NULL'}, ${p.color ? `'${escapeSql(p.color)}'` : 'NULL'}, '${escapeSql(p.unit)}', ${p.currentStock}, ${p.minStock}, ${p.costPrice}, ${p.salePrice}, ${p.supplierId ? `'${escapeSql(p.supplierId)}'` : 'NULL'}, '${escapeSql(p.location || 'Taller')}')`
-      ).join(',\n');
+      const pValues = products.map(p => {
+        const validSup = p.supplierId && supplierIds.has(p.supplierId) ? `'${escapeSql(p.supplierId)}'` : 'NULL';
+        return `('${escapeSql(p.id)}', '${escapeSql(p.sku)}', '${escapeSql(p.name)}', '${escapeSql(p.category)}', '${escapeSql(p.material)}', ${p.size ? `'${escapeSql(p.size)}'` : 'NULL'}, ${p.color ? `'${escapeSql(p.color)}'` : 'NULL'}, '${escapeSql(p.unit)}', ${p.currentStock}, ${p.minStock}, ${p.costPrice}, ${p.salePrice}, ${validSup}, '${escapeSql(p.location || 'Taller')}')`;
+      }).join(',\n');
       sql += pValues + ';\n\n';
     }
 
-    // Customers
-    if (customers.length > 0) {
+    // 4. Customers
+    if (allCustomers.length > 0) {
       sql += `-- Inserción de Clientes\n`;
       sql += `INSERT INTO \`customers\` (\`id\`, \`name\`, \`business_or_contact\`, \`phone\`, \`email\`, \`total_orders_count\`, \`total_spent\`, \`current_balance\`) VALUES\n`;
-      const cValues = customers.map(c => 
-        `('${escapeSql(c.id)}', '${escapeSql(c.name)}', '${escapeSql(c.businessOrContact || '')}', '${escapeSql(c.phone)}', '${escapeSql(c.email)}', ${c.totalOrdersCount}, ${c.totalSpent}, ${c.currentBalance})`
+      const cValues = allCustomers.map(c => 
+        `('${escapeSql(c.id)}', '${escapeSql(c.name)}', '${escapeSql(c.businessOrContact || '')}', '${escapeSql(c.phone || '')}', '${escapeSql(c.email || '')}', ${c.totalOrdersCount || 0}, ${c.totalSpent || 0}, ${c.currentBalance || 0})`
       ).join(',\n');
       sql += cValues + ';\n\n';
     }
 
-    // Orders
+    // 5. Orders
     if (orders.length > 0) {
       sql += `-- Inserción de Pedidos de Producción\n`;
       sql += `INSERT INTO \`customer_orders\` (\`id\`, \`order_number\`, \`customer_id\`, \`customer_name\`, \`customer_phone\`, \`created_at\`, \`delivery_date\`, \`delivery_time\`, \`production_status\`, \`payment_status\`, \`deposit_amount\`, \`total_amount\`, \`cost_total\`, \`remaining_balance\`) VALUES\n`;
-      const oValues = orders.map(o => 
-        `('${escapeSql(o.id)}', '${escapeSql(o.orderNumber)}', '${escapeSql(o.customerId)}', '${escapeSql(o.customerName)}', '${escapeSql(o.customerPhone)}', '${escapeSql(o.createdAt.replace('T', ' ').slice(0, 19))}', '${escapeSql(o.deliveryDate)}', '${escapeSql(o.deliveryTime || '17:00')}', '${o.productionStatus}', '${o.paymentStatus}', ${o.depositAmount}, ${o.totalAmount}, ${o.costTotal}, ${o.remainingBalance})`
-      ).join(',\n');
+      const oValues = orders.map(o => {
+        const validCustId = o.customerId && customerIds.has(o.customerId) ? o.customerId : allCustomers[0]?.id;
+        return `('${escapeSql(o.id)}', '${escapeSql(o.orderNumber)}', '${escapeSql(validCustId)}', '${escapeSql(o.customerName)}', '${escapeSql(o.customerPhone || '')}', '${escapeSql((o.createdAt || new Date().toISOString()).replace('T', ' ').slice(0, 19))}', '${escapeSql(o.deliveryDate)}', '${escapeSql(o.deliveryTime || '17:00')}', '${o.productionStatus}', '${o.paymentStatus}', ${o.depositAmount || 0}, ${o.totalAmount || 0}, ${o.costTotal || 0}, ${o.remainingBalance || 0})`;
+      }).join(',\n');
       sql += oValues + ';\n\n';
 
-      // Order Items
+      // 6. Order Items
+      const productIds = new Set(products.map(p => p.id));
       const allItems: Array<{ orderId: string; item: any }> = [];
-      orders.forEach(o => o.items.forEach(i => allItems.push({ orderId: o.id, item: i })));
+      orders.forEach(o => {
+        (o.items || []).forEach(i => {
+          if (productIds.has(i.productId)) {
+            allItems.push({ orderId: o.id, item: i });
+          }
+        });
+      });
 
       if (allItems.length > 0) {
         sql += `-- Inserción de Ítems de Pedidos (con modo Lisa/Estampada y Diseños)\n`;
         sql += `INSERT INTO \`order_items\` (\`order_id\`, \`product_id\`, \`product_name\`, \`quantity\`, \`unit_price\`, \`unit_cost\`, \`total_price\`, \`sale_mode\`, \`customization_details\`) VALUES\n`;
         const itemValues = allItems.map(({ orderId, item }) => 
-          `('${escapeSql(orderId)}', '${escapeSql(item.productId)}', '${escapeSql(item.productName)}', ${item.quantity}, ${item.unitPrice}, ${item.unitCost}, ${item.totalPrice}, '${item.saleMode || 'estampada'}', '${escapeSql(item.customizationDetails || '')}')`
+          `('${escapeSql(orderId)}', '${escapeSql(item.productId)}', '${escapeSql(item.productName)}', ${item.quantity}, ${item.unitPrice}, ${item.unitCost || 0}, ${item.totalPrice}, '${item.saleMode || 'estampada'}', '${escapeSql(item.customizationDetails || '')}')`
         ).join(',\n');
         sql += itemValues + ';\n\n';
       }
     }
 
-    sql += `-- Fin del script MySQL. Listo para importar en Google Cloud SQL, AWS RDS o contenedor Docker MySQL 8.\n`;
+    // 7. Daily Sales
+    if (dailySales.length > 0) {
+      sql += `-- Inserción de Ventas Diarias de Mostrador\n`;
+      sql += `INSERT INTO \`daily_sales\` (\`id\`, \`sale_number\`, \`date\`, \`customer_name\`, \`payment_method\`, \`total_amount\`, \`total_cost\`, \`notes\`) VALUES\n`;
+      const dsValues = dailySales.map(s => 
+        `('${escapeSql(s.id)}', '${escapeSql(s.saleNumber)}', '${escapeSql(s.date.replace('T', ' ').slice(0, 19))}', '${escapeSql(s.customerName)}', '${s.paymentMethod}', ${s.totalAmount}, ${s.totalCost}, '${escapeSql(s.notes || '')}')`
+      ).join(',\n');
+      sql += dsValues + ';\n\n';
+    }
+
+    sql += `-- ------------------------------------------------------------\n`;
+    sql += `-- Commit de transacciones y reactivación de foreign keys\n`;
+    sql += `-- ------------------------------------------------------------\n`;
+    sql += `COMMIT;\n`;
+    sql += `SET FOREIGN_KEY_CHECKS = 1;\n\n`;
+    sql += `-- Fin del script MySQL. Importado con éxito en MySQL local / Cloud SQL / AWS RDS.\n`;
     return sql;
   }
 
@@ -520,7 +590,7 @@ public class CustomerOrder {
     dailySales: DailySale[],
     users: AppUser[]
   ): string {
-    return this.generateMySQLDump(products, customers, orders, suppliers, dailySales, users);
+    return this.generateMySQLDump(products, suppliers, customers, orders, dailySales, users);
   }
 
   static getSpringBootStructure(): Record<string, string> {

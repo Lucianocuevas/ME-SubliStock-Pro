@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Truck, Save } from 'lucide-react';
-import { Supplier, ProductCategory } from '../../types';
+import { Supplier, ProductCategory, CategoryDefinition } from '../../types';
 import { StorageService } from '../../services/storageService';
-import { CATEGORY_LABELS } from '../../data/initialData';
 
 interface Props {
   isOpen: boolean;
@@ -21,6 +20,13 @@ export const NewSupplierModal: React.FC<Props> = ({ isOpen, onClose, supplierToE
   const [leadTimeDays, setLeadTimeDays] = useState(3);
   const [selectedCategories, setSelectedCategories] = useState<ProductCategory[]>(['tazas']);
   const [notes, setNotes] = useState('');
+  const [categoriesList, setCategoriesList] = useState<CategoryDefinition[]>(() => StorageService.getCategories());
+
+  useEffect(() => {
+    if (isOpen) {
+      setCategoriesList(StorageService.getCategories());
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (supplierToEdit) {
@@ -217,20 +223,20 @@ export const NewSupplierModal: React.FC<Props> = ({ isOpen, onClose, supplierToE
               Rubros de Insumos que Provee
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {Object.entries(CATEGORY_LABELS).map(([catKey, val]) => {
-                const isSelected = selectedCategories.includes(catKey as ProductCategory);
+              {categoriesList.map(cat => {
+                const isSelected = selectedCategories.includes(cat.id as ProductCategory);
                 return (
                   <button
-                    key={catKey}
+                    key={cat.id}
                     type="button"
-                    onClick={() => toggleCategory(catKey as ProductCategory)}
+                    onClick={() => toggleCategory(cat.id as ProductCategory)}
                     className={`p-2 rounded-lg text-xs font-medium border text-center transition-colors ${
                       isSelected
                         ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200 font-bold'
                         : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
                     }`}
                   >
-                    {val.label}
+                    {cat.label}
                   </button>
                 );
               })}
